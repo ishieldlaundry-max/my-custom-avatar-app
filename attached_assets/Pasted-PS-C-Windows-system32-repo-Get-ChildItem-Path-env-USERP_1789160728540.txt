@@ -1,0 +1,57 @@
+PS C:\Windows\system32> $repo = Get-ChildItem `
+>>   -Path $env:USERPROFILE `
+>>   -Directory `
+>>   -Recurse `
+>>   -Filter "FasterLivePortrait-master" `
+>>   -ErrorAction SilentlyContinue |
+>>   Select-Object -First 1
+PS C:\Windows\system32>
+PS C:\Windows\system32> $repo.FullName
+C:\Users\obedk\Desktop\emma face ca\FasterLivePortrait-master
+PS C:\Windows\system32> cd $HOME
+>> git clone https://github.com/ishieldlaundry-max/my-custom-avatar-app.git FasterLivePortrait-local
+>> cd .\FasterLivePortrait-local
+>> git status
+Cloning into 'FasterLivePortrait-local'...
+remote: Enumerating objects: 282, done.
+remote: Counting objects: 100% (282/282), done.
+remote: Compressing objects: 100% (199/199), done.
+remote: Total 282 (delta 92), reused 266 (delta 78), pack-reused 0 (from 0)
+Receiving objects: 100% (282/282), 28.82 MiB | 118.00 KiB/s, done.
+Resolving deltas: 100% (92/92), done.
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+PS C:\Users\obedk\FasterLivePortrait-local> git log -1 --oneline
+1c20fa0 (HEAD -> main, origin/main, origin/HEAD) Add image asset to attachments
+PS C:\Users\obedk\FasterLivePortrait-local> Get-Item .\webui.py
+
+
+    Directory: C:\Users\obedk\FasterLivePortrait-local
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a----         9/11/2026   8:53 PM          34751 webui.py
+
+
+PS C:\Users\obedk\FasterLivePortrait-local> hf download warmshao/FasterLivePortrait --local-dir .\checkpoints
+hf : The term 'hf' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hf download warmshao/FasterLivePortrait --local-dir .\checkpoints
++ ~~
+    + CategoryInfo          : ObjectNotFound: (hf:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\Users\obedk\FasterLivePortrait-local> python -m pip install "huggingface_hub[cli]"
+Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+PS C:\Users\obedk\FasterLivePortrait-local> hf download warmshao/FasterLivePortrait --local-dir .\checkpoints
+hf : The term 'hf' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hf download warmshao/FasterLivePortrait --local-dir .\checkpoints
++ ~~
+    + CategoryInfo          : ObjectNotFound: (hf:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
