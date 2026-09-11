@@ -180,14 +180,30 @@ class OnnxRuntimePredictor:
         assert os.path.exists(model_path), "model path must exist!"
         # print("loading ort model:{}".format(model_path))
         self.debug = kwargs.get("debug", False)
-        providers = ['CUDAExecutionProvider', 'CoreMLExecutionProvider', 'CPUExecutionProvider']
+        available_providers = onnxruntime.get_available_providers()
+        preferred_providers = [
+            provider for provider in (
+                'CUDAExecutionProvider',
+                'CoreMLExecutionProvider',
+                'CPUExecutionProvider',
+            ) if provider in available_providers
+        ]
+        if not preferred_providers:
+            raise RuntimeError(
+                "ONNX Runtime has no usable execution provider. "
+                f"Available providers: {available_providers}"
+            )
 
-        print(f"OnnxRuntime use {providers}")
+        print(f"OnnxRuntime use {preferred_providers}")
         opts = onnxruntime.SessionOptions()
         # opts.inter_op_num_threads = kwargs.get("num_threads", 4)
         # opts.intra_op_num_threads = kwargs.get("num_threads", 4)
         # opts.log_severity_level = 3
-        self.onnx_model = onnxruntime.InferenceSession(model_path, providers=providers, sess_options=opts)
+        self.onnx_model = onnxruntime.InferenceSession(
+            model_path,
+            providers=preferred_providers,
+            sess_options=opts,
+        )
         self.inputs = self.onnx_model.get_inputs()
         self.outputs = self.onnx_model.get_outputs()
 

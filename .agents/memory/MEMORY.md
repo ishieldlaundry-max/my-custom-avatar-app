@@ -1,0 +1,1 @@
+- [GPU runtime limits](gpu-runtime-limits.md) — this Replit runtime has no NVIDIA driver; TensorRT 8 provisioning is unavailable, so validate with the explicit ONNX CPU fallback.

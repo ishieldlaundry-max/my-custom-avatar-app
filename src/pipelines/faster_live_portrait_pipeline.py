@@ -89,10 +89,14 @@ class FasterLivePortraitPipeline:
             xpose_config_file_path: str = make_abs_path("models/XPose/config_model/UniPose_SwinT.py")
             xpose_ckpt_path: str = os.path.join(checkpoint_dir, "xpose.pth")
             xpose_embedding_cache_path: str = os.path.join(checkpoint_dir, 'clip_embedding')
-            self.model_dict["xpose"] = XPoseRunner(model_config_path=xpose_config_file_path,
-                                                   model_checkpoint_path=xpose_ckpt_path,
-                                                   embeddings_cache_path=xpose_embedding_cache_path,
-                                                   flag_use_half_precision=True)
+            use_cuda = torch.cuda.is_available()
+            self.model_dict["xpose"] = XPoseRunner(
+                model_config_path=xpose_config_file_path,
+                model_checkpoint_path=xpose_ckpt_path,
+                embeddings_cache_path=xpose_embedding_cache_path,
+                cpu_only=not use_cuda,
+                flag_use_half_precision=use_cuda,
+            )
 
     def init_vars(self, **kwargs):
         self.mask_crop = cv2.imread(self.cfg.infer_params.mask_crop_path, cv2.IMREAD_COLOR)

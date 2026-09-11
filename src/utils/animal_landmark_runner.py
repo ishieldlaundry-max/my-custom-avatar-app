@@ -6,6 +6,7 @@ face detectoin and alignment using XPose
 
 import os
 import pickle
+import io
 import torch
 import numpy as np
 from PIL import Image
@@ -34,13 +35,20 @@ class XPoseRunner(object):
         self.device_id = kwargs.get("device_id", 0)
         self.flag_use_half_precision = kwargs.get("flag_use_half_precision", True)
         self.device = f"cuda:{self.device_id}" if not cpu_only else "cpu"
+        if self.device.startswith("cuda") and not torch.cuda.is_available():
+            raise RuntimeError(
+                "XPose was configured for CUDA, but torch.cuda.is_available() is false. "
+                "Use the ONNX/CPU backend or provision an NVIDIA runtime."
+            )
         self.model = self.load_animal_model(model_config_path, model_checkpoint_path, self.device)
         # Load cached embeddings if available
         try:
-            with open(f'{embeddings_cache_path}_9.pkl', 'rb') as f:
-                self.ins_text_embeddings_9, self.kpt_text_embeddings_9 = pickle.load(f)
-            with open(f'{embeddings_cache_path}_68.pkl', 'rb') as f:
-                self.ins_text_embeddings_68, self.kpt_text_embeddings_68 = pickle.load(f)
+            self.ins_text_embeddings_9, self.kpt_text_embeddings_9 = self.load_embedding_cache(
+                f'{embeddings_cache_path}_9.pkl'
+            )
+            self.ins_text_embeddings_68, self.kpt_text_embeddings_68 = self.load_embedding_cache(
+                f'{embeddings_cache_path}_68.pkl'
+            )
             print("Loaded cached embeddings from file.")
         except Exception:
             raise ValueError("Could not load clip embeddings from file, please check your file path.")
@@ -49,10 +57,36 @@ class XPoseRunner(object):
         args = Config.fromfile(model_config_path)
         args.device = device
         model = build_model(args)
-        checkpoint = torch.load(model_checkpoint_path, map_location=lambda storage, loc: storage)
+        # The checkpoint is a trusted project artifact downloaded from the
+        # configured Hugging Face repository. PyTorch 2.6+ defaults to the
+        # restricted weights-only loader, which rejects its argparse.Namespace
+        # metadata.
+        checkpoint = torch.load(
+            model_checkpoint_path,
+            map_location=lambda storage, loc: storage,
+            weights_only=False,
+        )
         load_res = model.load_state_dict(clean_state_dict(checkpoint["model"]), strict=False)
         model.eval()
         return model
+
+    def load_embedding_cache(self, cache_path):
+        """Load nested torch pickles while honoring the selected device."""
+        original_loader = torch.storage._load_from_bytes
+
+        def load_from_bytes(buffer):
+            return torch.load(
+                io.BytesIO(buffer),
+                map_location=self.device,
+                weights_only=False,
+            )
+
+        torch.storage._load_from_bytes = load_from_bytes
+        try:
+            with open(cache_path, "rb") as f:
+                return pickle.load(f)
+        finally:
+            torch.storage._load_from_bytes = original_loader
 
     def load_image(self, input_image):
         image_pil = input_image.convert("RGB")
@@ -90,7 +124,11 @@ class XPoseRunner(object):
         image = image.to(self.device)
 
         with torch.no_grad():
-            with torch.autocast(device_type=self.device[:4], dtype=torch.float16, enabled=self.flag_use_half_precision):
+            with torch.autocast(
+                device_type=self.device.split(":")[0],
+                dtype=torch.float16,
+                enabled=self.flag_use_half_precision,
+            ):
                 outputs = self.model(image[None], [target])
 
         logits = outputs["pred_logits"].sigmoid()[0]

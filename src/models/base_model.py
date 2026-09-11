@@ -11,8 +11,12 @@ class BaseModel:
     def __init__(self, **kwargs):
         self.kwargs = copy.deepcopy(kwargs)
         self.predictor = get_predictor(**self.kwargs)
-        self.device = torch.cuda.current_device()
-        self.cudaStream = torch.cuda.current_stream().cuda_stream
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.cudaStream = (
+            torch.cuda.current_stream().cuda_stream
+            if self.device.type == "cuda"
+            else None
+        )
         self.predict_type = kwargs.get("predict_type", "trt")
 
         if self.predictor is not None:

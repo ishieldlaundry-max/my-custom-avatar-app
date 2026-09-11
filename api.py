@@ -2,6 +2,7 @@
 # @Time    : 2024/9/13 0:23
 # @Project : FasterLivePortrait
 # @FileName: api.py
+import importlib.util
 import pdb
 import shutil
 from typing import Optional, Dict, Any
@@ -96,6 +97,43 @@ def check_all_checkpoints_exist(infer_cfg):
     return ret
 
 
+def select_infer_config():
+    """Select the inference backend without hiding an explicit user choice.
+
+    The hosted Replit runtime is commonly CPU-only, while the reference
+    deployment uses TensorRT on NVIDIA hardware.  Keep TensorRT available as
+    an explicit option and use ONNX Runtime only when auto-detection finds
+    that CUDA/TensorRT are unavailable.
+    """
+    requested = os.environ.get("FLIP_INFER_BACKEND", "auto").lower()
+    configured_path = os.environ.get("FLIP_INFER_CONFIG")
+    if configured_path:
+        return configured_path
+    if requested in {"onnx", "ort", "cpu"}:
+        return os.path.join(project_dir, "configs/onnx_infer.yaml")
+    if requested == "trt":
+        return os.path.join(project_dir, "configs/trt_infer.yaml")
+    if requested != "auto":
+        raise ValueError(
+            "FLIP_INFER_BACKEND must be one of auto, trt, onnx, ort, or cpu"
+        )
+
+    cuda_available = False
+    try:
+        import torch
+        cuda_available = torch.cuda.is_available()
+    except ImportError:
+        pass
+    if cuda_available and importlib.util.find_spec("tensorrt") is not None:
+        return os.path.join(project_dir, "configs/trt_infer.yaml")
+
+    logger_f.warning(
+        "CUDA/TensorRT is unavailable; selecting ONNX Runtime CPU inference. "
+        "Set FLIP_INFER_BACKEND=trt to require TensorRT."
+    )
+    return os.path.join(project_dir, "configs/onnx_infer.yaml")
+
+
 def convert_onnx_to_trt_models(infer_cfg):
     ret = True
     for name in infer_cfg.models:
@@ -161,8 +199,8 @@ def convert_onnx_to_trt_models(infer_cfg):
 @app.on_event("startup")
 async def startup_event():
     global pipe
-    # default use trt model
-    cfg_file = os.path.join(project_dir, "configs/trt_infer.yaml")
+    cfg_file = select_infer_config()
+    logger_f.info(f"using inference config: {cfg_file}")
     infer_cfg = OmegaConf.load(cfg_file)
     checkpoints_exist = check_all_checkpoints_exist(infer_cfg)
 

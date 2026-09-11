@@ -5,7 +5,13 @@ def prepare_for_mask(kpt_mask):
 
 
     tgt_size2 = 50 * 69
-    attn_mask2 = torch.ones(kpt_mask.shape[0], 8, tgt_size2, tgt_size2).to('cuda') < 0
+    attn_mask2 = torch.ones(
+        kpt_mask.shape[0],
+        8,
+        tgt_size2,
+        tgt_size2,
+        device=kpt_mask.device,
+    ) < 0
     group_bbox_kpt = 69
     num_group=50
     for matchj in range(num_group * group_bbox_kpt):
