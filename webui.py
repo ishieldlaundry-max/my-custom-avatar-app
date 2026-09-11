@@ -43,8 +43,10 @@ infer_cfg = OmegaConf.load(cfg_path)
 gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
 
 
-def gpu_wrapped_execute_video(*args, **kwargs):
-    return gradio_pipeline.execute_video(*args, **kwargs)
+def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam_video, *args, **kwargs):
+    """Keep the pipeline API unchanged while allowing the UI to select a webcam clip."""
+    selected_source_video = webcam_video if webcam_enabled else source_video
+    return gradio_pipeline.execute_video(source_image, selected_source_video, *args, **kwargs)
 
 
 def gpu_wrapped_execute_image(*args, **kwargs):
@@ -58,7 +60,6 @@ def change_animal_model(is_animal):
 
 
 # assets
-title_md = "assets/gradio/gradio_title.md"
 example_portrait_dir = "assets/examples/source"
 example_video_dir = "assets/examples/driving"
 #################### interface logic ####################
@@ -70,266 +71,810 @@ retargeting_input_image = gr.Image(type="filepath")
 output_image = gr.Image(format="png", type="numpy")
 output_image_paste_back = gr.Image(format="png", type="numpy")
 
-js_func = """
-    function refresh() {
+CYBERPUNK_CSS = r"""
+:root {
+    --cyber-bg: #070b13;
+    --cyber-panel: #0e1624;
+    --cyber-panel-strong: #111d2d;
+    --cyber-line: rgba(115, 236, 255, 0.20);
+    --cyber-line-hot: rgba(255, 64, 177, 0.48);
+    --cyber-cyan: #65efff;
+    --cyber-cyan-soft: #a8f6ff;
+    --cyber-pink: #ff4db8;
+    --cyber-pink-bright: #ff72c8;
+    --cyber-text: #e7f5ff;
+    --cyber-muted: #7d9aae;
+    --cyber-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+}
+
+body, .gradio-container {
+    background:
+        radial-gradient(circle at 78% 5%, rgba(0, 214, 255, 0.10), transparent 30rem),
+        radial-gradient(circle at 10% 35%, rgba(255, 0, 153, 0.07), transparent 25rem),
+        var(--cyber-bg) !important;
+    color: var(--cyber-text) !important;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.gradio-container {
+    max-width: 1680px !important;
+    padding: 28px clamp(16px, 3vw, 52px) 52px !important;
+}
+
+#cyber-header {
+    border: 1px solid var(--cyber-line);
+    border-radius: 22px;
+    background: linear-gradient(120deg, rgba(17, 29, 45, 0.96), rgba(11, 19, 32, 0.88));
+    box-shadow: var(--cyber-shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    padding: 28px clamp(22px, 4vw, 64px);
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+}
+
+#cyber-header::after {
+    content: "";
+    position: absolute;
+    inset: auto -10% -70% 35%;
+    height: 210px;
+    background: radial-gradient(ellipse, rgba(101, 239, 255, 0.18), transparent 68%);
+    pointer-events: none;
+}
+
+.cyber-eyebrow, .cyber-kicker {
+    color: var(--cyber-cyan);
+    font-size: 0.70rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+#cyber-header h1 {
+    color: var(--cyber-text);
+    font-size: clamp(1.8rem, 4vw, 3.6rem);
+    letter-spacing: -0.045em;
+    line-height: 0.98;
+    margin: 10px 0;
+    position: relative;
+    z-index: 1;
+}
+
+#cyber-header p {
+    color: var(--cyber-muted);
+    margin: 0;
+    max-width: 760px;
+    position: relative;
+    z-index: 1;
+}
+
+#cyber-alerts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.cyber-alert {
+    border: 1px solid var(--cyber-line);
+    border-left: 3px solid var(--cyber-cyan);
+    border-radius: 12px;
+    background: rgba(14, 22, 36, 0.80);
+    color: var(--cyber-cyan-soft);
+    font-size: 0.86rem;
+    line-height: 1.45;
+    padding: 12px 15px;
+}
+
+.cyber-alert.hot {
+    border-color: var(--cyber-line-hot);
+    border-left-color: var(--cyber-pink);
+    color: #ffd8ed;
+}
+
+#cyber-workspace {
+    align-items: stretch;
+    gap: 18px;
+}
+
+#control-sidebar, #preview-panel {
+    border: 1px solid var(--cyber-line);
+    border-radius: 18px;
+    background: rgba(14, 22, 36, 0.88);
+    box-shadow: var(--cyber-shadow), inset 0 1px 0 rgba(255,255,255,0.035);
+    padding: 18px !important;
+}
+
+#control-sidebar {
+    min-width: 330px;
+}
+
+#preview-panel {
+    min-width: 0;
+}
+
+.cyber-section-title {
+    color: var(--cyber-text);
+    font-size: 1.0rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 6px 0 13px;
+}
+
+.cyber-section-title span {
+    color: var(--cyber-cyan);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    margin-right: 9px;
+}
+
+.cyber-note {
+    border: 1px solid rgba(101, 239, 255, 0.13);
+    border-radius: 10px;
+    color: var(--cyber-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    padding: 10px 12px;
+    margin: 10px 0 14px;
+}
+
+#portrait-uploader, #webcam-input, #source-video-input {
+    border: 1px solid rgba(101, 239, 255, 0.25) !important;
+    border-radius: 13px !important;
+    overflow: hidden;
+}
+
+#portrait-uploader .upload-container,
+#webcam-input .upload-container,
+#source-video-input .upload-container {
+    min-height: 205px;
+    background: linear-gradient(145deg, rgba(101, 239, 255, 0.07), rgba(255, 77, 184, 0.04));
+}
+
+#preview-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+#preview-header .status {
+    border: 1px solid rgba(101, 239, 255, 0.3);
+    border-radius: 999px;
+    color: var(--cyber-cyan);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    padding: 6px 10px;
+    text-transform: uppercase;
+}
+
+#driving-tabs {
+    border: 1px solid rgba(101, 239, 255, 0.13);
+    border-radius: 14px;
+    padding: 10px;
+}
+
+#driving-tabs button.selected, #driving-tabs button[aria-selected="true"] {
+    color: var(--cyber-cyan) !important;
+    border-color: var(--cyber-cyan) !important;
+}
+
+#animation-controls {
+    border: 1px solid rgba(255, 77, 184, 0.22);
+    border-radius: 14px;
+    background: rgba(255, 77, 184, 0.035);
+    margin-top: 14px;
+    padding: 12px;
+}
+
+#animate-button button, #retarget-button button {
+    background: linear-gradient(100deg, var(--cyber-pink), #b62dff) !important;
+    border: 0 !important;
+    border-radius: 11px !important;
+    box-shadow: 0 0 24px rgba(255, 77, 184, 0.27);
+    color: #fff !important;
+    font-weight: 850 !important;
+    letter-spacing: 0.03em;
+    min-height: 52px;
+}
+
+#animate-button button:hover, #retarget-button button:hover {
+    box-shadow: 0 0 34px rgba(255, 77, 184, 0.48);
+    transform: translateY(-1px);
+}
+
+#output-video, #output-video-secondary {
+    border: 1px solid rgba(101, 239, 255, 0.27) !important;
+    border-radius: 14px !important;
+    background: #05080e !important;
+    min-height: 390px;
+    overflow: hidden;
+}
+
+#output-video video, #output-video-secondary video {
+    background: #05080e;
+    min-height: 360px;
+    object-fit: contain;
+}
+
+#voice-shifter {
+    border: 1px solid rgba(255, 77, 184, 0.28);
+    border-radius: 13px;
+    background: linear-gradient(145deg, rgba(255, 77, 184, 0.08), rgba(101, 239, 255, 0.04));
+    margin-top: 14px;
+    padding: 14px;
+}
+
+#voice-shifter h3 {
+    color: var(--cyber-text);
+    font-size: 0.92rem;
+    margin: 0 0 4px;
+}
+
+#voice-shifter p {
+    color: var(--cyber-muted);
+    font-size: 0.76rem;
+    line-height: 1.4;
+    margin: 0 0 11px;
+}
+
+#voice-shifter button {
+    background: transparent;
+    border: 1px solid var(--cyber-pink);
+    border-radius: 9px;
+    color: #ffd8ed;
+    cursor: pointer;
+    font-weight: 750;
+    padding: 9px 12px;
+    width: 100%;
+}
+
+#voice-shifter button:hover {
+    background: rgba(255, 77, 184, 0.16);
+}
+
+#voice-shifter button.stop {
+    border-color: var(--cyber-cyan);
+    color: var(--cyber-cyan-soft);
+}
+
+#voice-shifter-status {
+    color: var(--cyber-muted);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.68rem;
+    margin-top: 9px;
+}
+
+footer { display: none !important; }
+
+@media (max-width: 900px) {
+    #cyber-alerts { grid-template-columns: 1fr; }
+    #cyber-workspace { flex-direction: column !important; }
+    #control-sidebar { min-width: 0; }
+    #output-video, #output-video-secondary { min-height: 260px; }
+    #output-video video, #output-video-secondary video { min-height: 240px; }
+}
+"""
+
+
+CYBER_HEADER_HTML = """
+<header id="cyber-header">
+    <div class="cyber-eyebrow">FasterLivePortrait / local inference console</div>
+    <h1>Bring a face online.</h1>
+    <p>Compose a source portrait, choose a motion signal, and render the final avatar locally on your NVIDIA workstation.</p>
+</header>
+"""
+
+
+CYBER_ALERTS_HTML = """
+<section id="cyber-alerts" aria-label="capture reminders">
+    <div class="cyber-alert"><strong>FRAME LOCK //</strong> Keep your face centered, well lit, and fully inside the camera frame.</div>
+    <div class="cyber-alert hot"><strong>PORTRAIT CHECK //</strong> Use a front-facing photo with visible eyes and mouth for cleaner dress and face sync.</div>
+</section>
+"""
+
+
+AUDIO_WIDGET_HTML = """
+<section id="voice-shifter" data-pitch-shift-widget>
+    <h3>REAL-TIME VOICE SHIFTER</h3>
+    <p>Browser microphone → +12 semitone pitch shift → local speakers. Headphones are recommended to prevent feedback.</p>
+    <button type="button" data-voice-start>Start feminine pitch</button>
+    <div id="voice-shifter-status" data-voice-status>Microphone idle</div>
+</section>
+"""
+
+
+# Gradio's HTML node hosts the controls; this launch-time script binds them and
+# creates a native AudioWorklet so no server-side audio or external service is used.
+js_func = r"""
+() => {
+    const bootCyberpunkAudio = () => {
+        const panel = document.querySelector("[data-pitch-shift-widget]");
+        if (!panel || panel.dataset.bound === "true") return;
+        panel.dataset.bound = "true";
+
+        const button = panel.querySelector("[data-voice-start]");
+        const status = panel.querySelector("[data-voice-status]");
+        let context = null;
+        let stream = null;
+        let source = null;
+        let shifter = null;
+
+        const setStatus = (message, error = false) => {
+            status.textContent = message;
+            status.style.color = error ? "#ff8aca" : "";
+        };
+
+        const workletSource = `
+            class CyberPitchShiftProcessor extends AudioWorkletProcessor {
+                constructor() {
+                    super();
+                    this.size = 32768;
+                    this.buffer = new Float32Array(this.size);
+                    this.write = 0;
+                    this.absoluteWrite = 0;
+                    this.latency = 4096;
+                    this.grainSize = 2048;
+                    this.hop = this.grainSize / 2;
+                    this.ratio = 2.0;
+                    this.phaseA = 0;
+                    this.phaseB = this.hop;
+                    this.startA = 0;
+                    this.startB = 0;
+                    this.ready = false;
+                }
+
+                sampleAt(position) {
+                    const wrapped = ((position % this.size) + this.size) % this.size;
+                    const left = Math.floor(wrapped);
+                    const right = (left + 1) % this.size;
+                    const mix = wrapped - left;
+                    return this.buffer[left] * (1 - mix) + this.buffer[right] * mix;
+                }
+
+                window(phase) {
+                    return 0.5 - 0.5 * Math.cos((2 * Math.PI * phase) / this.grainSize);
+                }
+
+                process(inputs, outputs) {
+                    const input = inputs[0];
+                    const output = outputs[0];
+                    if (!input || !input[0] || !output || !output[0]) return true;
+                    const inChannel = input[0];
+                    const outChannel = output[0];
+
+                    for (let i = 0; i < outChannel.length; i++) {
+                        const value = inChannel[i] || 0;
+                        this.buffer[this.write] = value;
+                        const absoluteInput = this.absoluteWrite;
+
+                        if (!this.ready && absoluteInput > this.latency + this.grainSize) {
+                            this.startA = absoluteInput - this.latency;
+                            this.startB = this.startA - this.hop;
+                            this.ready = true;
+                        }
+
+                        if (!this.ready) {
+                            outChannel[i] = 0;
+                        } else {
+                            const readA = this.startA + this.phaseA * this.ratio;
+                            const readB = this.startB + this.phaseB * this.ratio;
+                            const ageA = absoluteInput - readA;
+                            const ageB = absoluteInput - readB;
+                            const validA = ageA > 8 && ageA < this.size - 8;
+                            const validB = ageB > 8 && ageB < this.size - 8;
+                            const weightA = this.window(this.phaseA);
+                            const weightB = this.window(this.phaseB);
+                            const valueA = validA ? this.sampleAt(readA) : 0;
+                            const valueB = validB ? this.sampleAt(readB) : 0;
+                            const weight = weightA + weightB || 1;
+                            outChannel[i] = (valueA * weightA + valueB * weightB) / weight;
+                        }
+
+                        this.phaseA += 1;
+                        this.phaseB += 1;
+                        if (this.phaseA >= this.grainSize) {
+                            this.phaseA -= this.hop;
+                            this.startA = absoluteInput - this.latency;
+                        }
+                        if (this.phaseB >= this.grainSize) {
+                            this.phaseB -= this.hop;
+                            this.startB = absoluteInput - this.latency;
+                        }
+                        this.write = (this.write + 1) % this.size;
+                        this.absoluteWrite += 1;
+                    }
+
+                    for (let channel = 1; channel < output.length; channel++) {
+                        output[channel].set(outChannel);
+                    }
+                    return true;
+                }
+            }
+            registerProcessor("cyber-pitch-shift", CyberPitchShiftProcessor);
+        `;
+
+        const stop = () => {
+            if (source) source.disconnect();
+            if (shifter) shifter.disconnect();
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (context && context.state !== "closed") context.close();
+            context = null;
+            stream = null;
+            source = null;
+            shifter = null;
+            button.textContent = "Start feminine pitch";
+            button.classList.remove("stop");
+            setStatus("Microphone idle");
+        };
+
+        button.addEventListener("click", async () => {
+            if (stream) {
+                stop();
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus("This browser does not expose microphone capture.", true);
+                return;
+            }
+
+            try {
+                setStatus("Requesting microphone permission…");
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                context = new (window.AudioContext || window.webkitAudioContext)();
+                const moduleUrl = URL.createObjectURL(
+                    new Blob([workletSource], { type: "application/javascript" })
+                );
+                await context.audioWorklet.addModule(moduleUrl);
+                URL.revokeObjectURL(moduleUrl);
+                source = context.createMediaStreamSource(stream);
+                shifter = new AudioWorkletNode(context, "cyber-pitch-shift");
+                source.connect(shifter);
+                shifter.connect(context.destination);
+                await context.resume();
+                button.textContent = "Stop voice shifter";
+                button.classList.add("stop");
+                setStatus("Live // +12 semitones // speaker output");
+            } catch (error) {
+                stop();
+                setStatus(`Microphone error: ${error.message}`, true);
+            }
+        });
+
+        window.addEventListener("beforeunload", stop, { once: true });
+    };
+
+    const refresh = () => {
         const url = new URL(window.location);
-
-        if (url.searchParams.get('__theme') !== 'dark') {
-            url.searchParams.set('__theme', 'dark');
-            window.location.href = url.href;
+        if (url.searchParams.get("__theme") !== "dark") {
+            url.searchParams.set("__theme", "dark");
+            window.location.replace(url.href);
+            return;
         }
-    }
-    """
+        bootCyberpunkAudio();
+    };
+    setTimeout(refresh, 0);
+    setInterval(bootCyberpunkAudio, 1200);
+}
+"""
 
-with gr.Blocks(theme=gr.themes.Soft(font=[gr.themes.GoogleFont("Plus Jakarta Sans")]), js=js_func) as demo:
-    gr.HTML(load_description(title_md))
 
-    gr.Markdown(load_description("assets/gradio/gradio_description_upload.md"))
-    with gr.Row():
-        with gr.Column():
+with gr.Blocks(
+        theme=gr.themes.Soft(
+            primary_hue="cyan",
+            secondary_hue="pink",
+            neutral_hue="slate",
+            font=[gr.themes.GoogleFont("Inter")],
+        ),
+        css=CYBERPUNK_CSS,
+        js=js_func,
+        title="FasterLivePortrait // Local Console",
+) as demo:
+    gr.HTML(CYBER_HEADER_HTML)
+    gr.HTML(CYBER_ALERTS_HTML)
+
+    with gr.Row(elem_id="cyber-workspace"):
+        with gr.Column(scale=1, min_width=330, elem_id="control-sidebar"):
+            gr.HTML('<div class="cyber-section-title"><span>01</span>Source configuration</div>')
+
+            webcam_toggle = gr.Checkbox(
+                value=False,
+                label="Enable webcam capture",
+                info="Use the local camera as the source video.",
+            )
+            webcam_input = gr.Video(
+                sources=["webcam"],
+                label="Webcam source",
+                visible=False,
+                elem_id="webcam-input",
+            )
+
             with gr.Tabs():
-                with gr.TabItem("🖼️ Source Image") as tab_image:
-                    with gr.Accordion(open=True, label="Source Image"):
-                        source_image_input = gr.Image(type="filepath")
-                        gr.Examples(
-                            examples=[
-                                [osp.join(example_portrait_dir, "s9.jpg")],
-                                [osp.join(example_portrait_dir, "s6.jpg")],
-                                [osp.join(example_portrait_dir, "s10.jpg")],
-                                [osp.join(example_portrait_dir, "s5.jpg")],
-                                [osp.join(example_portrait_dir, "s7.jpg")],
-                                [osp.join(example_portrait_dir, "s12.jpg")],
-                            ],
-                            inputs=[source_image_input],
-                            cache_examples=False,
-                        )
+                with gr.TabItem("Target portrait") as tab_image:
+                    source_image_input = gr.Image(
+                        type="filepath",
+                        label="Target photo",
+                        show_label=True,
+                        elem_id="portrait-uploader",
+                    )
+                    gr.Examples(
+                        examples=[
+                            [osp.join(example_portrait_dir, "s9.jpg")],
+                            [osp.join(example_portrait_dir, "s6.jpg")],
+                            [osp.join(example_portrait_dir, "s10.jpg")],
+                            [osp.join(example_portrait_dir, "s5.jpg")],
+                            [osp.join(example_portrait_dir, "s7.jpg")],
+                            [osp.join(example_portrait_dir, "s12.jpg")],
+                        ],
+                        inputs=[source_image_input],
+                        cache_examples=False,
+                    )
+                with gr.TabItem("Target video") as tab_video:
+                    source_video_input = gr.Video(
+                        sources=["upload"],
+                        label="Source video",
+                        elem_id="source-video-input",
+                    )
+                    gr.Examples(
+                        examples=[
+                            [osp.join(example_video_dir, "d9.mp4")],
+                            [osp.join(example_video_dir, "d10.mp4")],
+                            [osp.join(example_video_dir, "d11.mp4")],
+                            [osp.join(example_video_dir, "d12.mp4")],
+                            [osp.join(example_video_dir, "d13.mp4")],
+                            [osp.join(example_video_dir, "d14.mp4")],
+                        ],
+                        inputs=[source_video_input],
+                        cache_examples=False,
+                    )
+            tab_selection = gr.Textbox(value="Image", visible=False)
+            tab_image.select(lambda: "Image", None, tab_selection)
+            tab_video.select(lambda: "Video", None, tab_selection)
 
-                with gr.TabItem("🎞️ Source Video") as tab_video:
-                    with gr.Accordion(open=True, label="Source Video"):
-                        source_video_input = gr.Video()
-                        gr.Examples(
-                            examples=[
-                                [osp.join(example_video_dir, "d9.mp4")],
-                                [osp.join(example_video_dir, "d10.mp4")],
-                                [osp.join(example_video_dir, "d11.mp4")],
-                                [osp.join(example_video_dir, "d12.mp4")],
-                                [osp.join(example_video_dir, "d13.mp4")],
-                                [osp.join(example_video_dir, "d14.mp4")],
-                            ],
-                            inputs=[source_video_input],
-                            cache_examples=False,
-                        )
+            gr.HTML(
+                '<div class="cyber-note"><strong>CAPTURE NOTE //</strong> '
+                'Center the face, keep both eyes visible, and use a front-facing portrait '
+                'for the cleanest dress and face-sync result.</div>'
+            )
 
-                tab_selection = gr.Textbox(visible=False)
-                tab_image.select(lambda: "Image", None, tab_selection)
-                tab_video.select(lambda: "Video", None, tab_selection)
-            with gr.Accordion(open=True, label="Cropping Options for Source Image or Video"):
+            with gr.Accordion("Source crop controls", open=False):
                 with gr.Row():
-                    flag_do_crop_input = gr.Checkbox(value=True, label="do crop (source)")
-                    scale = gr.Number(value=2.3, label="source crop scale", minimum=1.8, maximum=3.2, step=0.05)
-                    vx_ratio = gr.Number(value=0.0, label="source crop x", minimum=-0.5, maximum=0.5, step=0.01)
-                    vy_ratio = gr.Number(value=-0.125, label="source crop y", minimum=-0.5, maximum=0.5, step=0.01)
-
-        with gr.Column():
-            with gr.Tabs():
-                with gr.TabItem("🎞️ Driving Video") as v_tab_video:
-                    with gr.Accordion(open=True, label="Driving Video"):
-                        driving_video_input = gr.Video()
-                        gr.Examples(
-                            examples=[
-                                [osp.join(example_video_dir, "d9.mp4")],
-                                [osp.join(example_video_dir, "d10.mp4")],
-                                [osp.join(example_video_dir, "d11.mp4")],
-                                [osp.join(example_video_dir, "d12.mp4")],
-                                [osp.join(example_video_dir, "d13.mp4")],
-                                [osp.join(example_video_dir, "d14.mp4")],
-                            ],
-                            inputs=[driving_video_input],
-                            cache_examples=False,
-                        )
-                with gr.TabItem("🖼️ Driving Image") as v_tab_image:
-                    with gr.Accordion(open=True, label="Driving Image"):
-                        driving_image_input = gr.Image(type="filepath")
-                        gr.Examples(
-                            examples=[
-                                [osp.join(example_portrait_dir, "s9.jpg")],
-                                [osp.join(example_portrait_dir, "s6.jpg")],
-                                [osp.join(example_portrait_dir, "s10.jpg")],
-                                [osp.join(example_portrait_dir, "s5.jpg")],
-                                [osp.join(example_portrait_dir, "s7.jpg")],
-                                [osp.join(example_portrait_dir, "s12.jpg")],
-                            ],
-                            inputs=[driving_image_input],
-                            cache_examples=False,
-                        )
-
-                with gr.TabItem("📁 Driving Pickle") as v_tab_pickle:
-                    with gr.Accordion(open=True, label="Driving Pickle"):
-                        driving_pickle_input = gr.File(type="filepath", file_types=[".pkl"])
-                        gr.Examples(
-                            examples=existing_examples(
-                                osp.join(example_video_dir, "d2.pkl"),
-                                osp.join(example_video_dir, "d8.pkl"),
-                            ),
-                            inputs=[driving_pickle_input],
-                            cache_examples=False,
-                        )
-
-                with gr.TabItem("🎵 Driving Audio") as v_tab_audio:
-                    with gr.Accordion(open=True, label="Driving Audio"):
-                        driving_audio_input = gr.Audio(
-                            value=None,
-                            type="filepath",
-                            interactive=True,
-                            show_label=False,
-                            waveform_options=gr.WaveformOptions(
-                                sample_rate=24000,
-                            ),
-                        )
-                        gr.Examples(
-                            examples=[
-                                [osp.join(example_video_dir, "a-01.wav")],
-                            ],
-                            inputs=[driving_audio_input],
-                            cache_examples=False,
-                        )
-
-                with gr.TabItem("📄Driving Text") as v_tab_text:
-                    with gr.Accordion(open=True, label="Driving Text"):
-                        driving_text_input = gr.Textbox(value="Hi, I am created by Faster LivePortrait!",
-                                                        label="Driving Text")
-                        voice_dir = "checkpoints/Kokoro-82M/voices/"
-                        voice_names = [
-                            os.path.splitext(vname)[0]
-                            for vname in os.listdir(voice_dir)
-                            if vname.endswith(".pt")
-                        ] if osp.isdir(voice_dir) else []
-                        if not voice_names:
-                            gr.Markdown(
-                                "Kokoro voice assets are not installed. "
-                                "Use video, image, pickle, or audio driving, "
-                                "or download the optional Kokoro-82M model."
-                            )
-                        voice_name = gr.Dropdown(
-                            choices=voice_names,
-                            value=voice_names[0] if voice_names else None,
-                            label="Voice Name",
-                            interactive=bool(voice_names),
-                        )
-
-                v_tab_selection = gr.Textbox(value="Video", visible=False)
-                v_tab_video.select(lambda: "Video", None, v_tab_selection)
-                v_tab_image.select(lambda: "Image", None, v_tab_selection)
-                v_tab_pickle.select(lambda: "Pickle", None, v_tab_selection)
-                v_tab_audio.select(lambda: "Audio", None, v_tab_selection)
-                v_tab_text.select(lambda: "Text", None, v_tab_selection)
-
-            # with gr.Accordion(open=False, label="Animation Instructions"):
-            # gr.Markdown(load_description("assets/gradio/gradio_description_animation.md"))
-            with gr.Accordion(open=True, label="Cropping Options for Driving Video"):
+                    flag_do_crop_input = gr.Checkbox(value=True, label="Crop source")
+                    scale = gr.Number(value=2.3, label="Scale", minimum=1.8, maximum=3.2, step=0.05)
                 with gr.Row():
-                    flag_crop_driving_video_input = gr.Checkbox(value=False, label="do crop (driving)")
-                    scale_crop_driving_video = gr.Number(value=2.2, label="driving crop scale", minimum=1.8,
-                                                         maximum=3.2, step=0.05)
-                    vx_ratio_crop_driving_video = gr.Number(value=0.0, label="driving crop x", minimum=-0.5,
-                                                            maximum=0.5, step=0.01)
-                    vy_ratio_crop_driving_video = gr.Number(value=-0.1, label="driving crop y", minimum=-0.5,
-                                                            maximum=0.5, step=0.01)
+                    vx_ratio = gr.Number(value=0.0, label="Crop X", minimum=-0.5, maximum=0.5, step=0.01)
+                    vy_ratio = gr.Number(value=-0.125, label="Crop Y", minimum=-0.5, maximum=0.5, step=0.01)
 
-    with gr.Row():
-        with gr.Accordion(open=True, label="Animation Options"):
+            gr.HTML(AUDIO_WIDGET_HTML)
+
+        with gr.Column(scale=3, min_width=600, elem_id="preview-panel"):
+            gr.HTML(
+                """
+                <div id="preview-header">
+                    <div>
+                        <div class="cyber-kicker">02 / Render output</div>
+                        <div class="cyber-section-title">Portrait preview</div>
+                    </div>
+                    <div class="status">LOCAL GPU PIPELINE</div>
+                </div>
+                """
+            )
+
+            with gr.Tabs(elem_id="driving-tabs"):
+                with gr.TabItem("Driving video") as v_tab_video:
+                    driving_video_input = gr.Video(
+                        sources=["upload"],
+                        label="Motion source",
+                    )
+                    gr.Examples(
+                        examples=[
+                            [osp.join(example_video_dir, "d9.mp4")],
+                            [osp.join(example_video_dir, "d10.mp4")],
+                            [osp.join(example_video_dir, "d11.mp4")],
+                            [osp.join(example_video_dir, "d12.mp4")],
+                            [osp.join(example_video_dir, "d13.mp4")],
+                            [osp.join(example_video_dir, "d14.mp4")],
+                        ],
+                        inputs=[driving_video_input],
+                        cache_examples=False,
+                    )
+                with gr.TabItem("Driving image") as v_tab_image:
+                    driving_image_input = gr.Image(type="filepath", label="Motion image")
+                    gr.Examples(
+                        examples=[
+                            [osp.join(example_portrait_dir, "s9.jpg")],
+                            [osp.join(example_portrait_dir, "s6.jpg")],
+                            [osp.join(example_portrait_dir, "s10.jpg")],
+                            [osp.join(example_portrait_dir, "s5.jpg")],
+                            [osp.join(example_portrait_dir, "s7.jpg")],
+                            [osp.join(example_portrait_dir, "s12.jpg")],
+                        ],
+                        inputs=[driving_image_input],
+                        cache_examples=False,
+                    )
+                with gr.TabItem("Driving pickle") as v_tab_pickle:
+                    driving_pickle_input = gr.File(type="filepath", file_types=[".pkl"], label="Motion pickle")
+                    gr.Examples(
+                        examples=existing_examples(
+                            osp.join(example_video_dir, "d2.pkl"),
+                            osp.join(example_video_dir, "d8.pkl"),
+                        ),
+                        inputs=[driving_pickle_input],
+                        cache_examples=False,
+                    )
+                with gr.TabItem("Driving audio") as v_tab_audio:
+                    driving_audio_input = gr.Audio(
+                        value=None,
+                        type="filepath",
+                        interactive=True,
+                        show_label=False,
+                        waveform_options=gr.WaveformOptions(sample_rate=24000),
+                    )
+                    gr.Examples(
+                        examples=[[osp.join(example_video_dir, "a-01.wav")]],
+                        inputs=[driving_audio_input],
+                        cache_examples=False,
+                    )
+                with gr.TabItem("Driving text") as v_tab_text:
+                    driving_text_input = gr.Textbox(
+                        value="Hi, I am created by Faster LivePortrait!",
+                        label="Driving text",
+                    )
+                    voice_dir = "checkpoints/Kokoro-82M/voices/"
+                    voice_names = [
+                        os.path.splitext(vname)[0]
+                        for vname in os.listdir(voice_dir)
+                        if vname.endswith(".pt")
+                    ] if osp.isdir(voice_dir) else []
+                    if not voice_names:
+                        gr.Markdown(
+                            "Kokoro voice assets are not installed. "
+                            "Use video, image, pickle, or audio driving, "
+                            "or download the optional Kokoro-82M model."
+                        )
+                    voice_name = gr.Dropdown(
+                        choices=voice_names,
+                        value=voice_names[0] if voice_names else None,
+                        label="Voice name",
+                        interactive=bool(voice_names),
+                    )
+
+            v_tab_selection = gr.Textbox(value="Video", visible=False)
+            v_tab_video.select(lambda: "Video", None, v_tab_selection)
+            v_tab_image.select(lambda: "Image", None, v_tab_selection)
+            v_tab_pickle.select(lambda: "Pickle", None, v_tab_selection)
+            v_tab_audio.select(lambda: "Audio", None, v_tab_selection)
+            v_tab_text.select(lambda: "Text", None, v_tab_selection)
+
+            with gr.Accordion("Motion and render controls", open=False, elem_id="animation-controls"):
+                with gr.Row():
+                    flag_relative_input = gr.Checkbox(value=False, label="Relative motion")
+                    flag_stitching = gr.Checkbox(value=True, label="Stitching")
+                    flag_remap_input = gr.Checkbox(value=True, label="Paste-back")
+                    flag_is_animal = gr.Checkbox(value=False, label="Animal model")
+                with gr.Row():
+                    driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
+                    cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
+                    animation_region = gr.Radio(["exp", "pose", "lip", "eyes", "all"], value="all", label="Animation region")
+                with gr.Row():
+                    flag_crop_driving_video_input = gr.Checkbox(value=False, label="Crop driving video")
+                    scale_crop_driving_video = gr.Number(value=2.2, label="Driving scale", minimum=1.8, maximum=3.2, step=0.05)
+                    vx_ratio_crop_driving_video = gr.Number(value=0.0, label="Driving X", minimum=-0.5, maximum=0.5, step=0.01)
+                    vy_ratio_crop_driving_video = gr.Number(value=-0.1, label="Driving Y", minimum=-0.5, maximum=0.5, step=0.01)
+                with gr.Row():
+                    flag_video_editing_head_rotation = gr.Checkbox(value=False, label="Head rotation")
+                    driving_smooth_observation_variance = gr.Number(
+                        value=1e-7,
+                        label="Motion smooth strength",
+                        minimum=1e-11,
+                        maximum=1e-2,
+                        step=1e-8,
+                    )
+
+            gr.HTML('<div class="cyber-kicker">03 / Execute</div>')
             with gr.Row():
-                flag_relative_input = gr.Checkbox(value=False, label="relative motion")
-                flag_stitching = gr.Checkbox(value=True, label="stitching")
-                driving_multiplier = gr.Number(value=1.0, label="driving multiplier", minimum=0.0, maximum=2.0,
-                                               step=0.02)
-                cfg_scale = gr.Number(value=4.0, label="cfg_scale", minimum=0.0, maximum=10.0, step=0.5)
-                flag_remap_input = gr.Checkbox(value=True, label="paste-back")
-                animation_region = gr.Radio(["exp", "pose", "lip", "eyes", "all"], value="all",
-                                            label="animation region")
-                flag_video_editing_head_rotation = gr.Checkbox(value=False, label="relative head rotation (v2v)")
-                driving_smooth_observation_variance = gr.Number(value=1e-7, label="motion smooth strength (v2v)",
-                                                                minimum=1e-11, maximum=1e-2, step=1e-8)
-                flag_is_animal = gr.Checkbox(value=False, label="is_animal")
-
-    gr.Markdown(load_description("assets/gradio/gradio_description_animate_clear.md"))
-    with gr.Row():
-        process_button_animation = gr.Button("🚀 Animate", variant="primary")
-
-    with gr.Column():
-        with gr.Row():
-            with gr.Column():
-                output_video_i2v = gr.Video(autoplay=False, label="The animated video in the original image space")
-            with gr.Column():
-                output_video_concat_i2v = gr.Video(autoplay=False, label="The animated video")
-        with gr.Row():
-            with gr.Column():
-                output_image_i2i = gr.Image(format="png", type="numpy",
-                                            label="The animated image in the original image space",
-                                            visible=False)
-            with gr.Column():
-                output_image_concat_i2i = gr.Image(format="png", type="numpy", label="The animated image",
-                                                   visible=False)
-    with gr.Row():
-        process_button_reset = gr.ClearButton(
-            [source_image_input, source_video_input, driving_pickle_input, driving_video_input,
-             driving_image_input, output_video_i2v, output_video_concat_i2v, output_image_i2i, output_image_concat_i2i],
-            value="🧹 Clear")
-
-    # Retargeting
-    gr.Markdown(load_description("assets/gradio/gradio_description_retargeting.md"), visible=True)
-    with gr.Row(visible=True):
-        eye_retargeting_slider.render()
-        lip_retargeting_slider.render()
-    with gr.Row(visible=True):
-        process_button_retargeting = gr.Button("🚗 Retargeting", variant="primary")
-        process_button_reset_retargeting = gr.ClearButton(
-            [
-                eye_retargeting_slider,
-                lip_retargeting_slider,
-                retargeting_input_image,
-                output_image,
-                output_image_paste_back
-            ],
-            value="🧹 Clear"
-        )
-    with gr.Row(visible=True):
-        with gr.Column():
-            with gr.Accordion(open=True, label="Retargeting Input"):
-                retargeting_input_image.render()
-                gr.Examples(
-                    examples=[
-                        [osp.join(example_portrait_dir, "s9.jpg")],
-                        [osp.join(example_portrait_dir, "s6.jpg")],
-                        [osp.join(example_portrait_dir, "s10.jpg")],
-                        [osp.join(example_portrait_dir, "s5.jpg")],
-                        [osp.join(example_portrait_dir, "s7.jpg")],
-                        [osp.join(example_portrait_dir, "s12.jpg")],
-                    ],
-                    inputs=[retargeting_input_image],
-                    cache_examples=False,
+                process_button_animation = gr.Button(
+                    "RENDER PORTRAIT",
+                    variant="primary",
+                    elem_id="animate-button",
                 )
-        with gr.Column():
-            with gr.Accordion(open=True, label="Retargeting Result"):
-                output_image.render()
-        with gr.Column():
-            with gr.Accordion(open=True, label="Paste-back Result"):
-                output_image_paste_back.render()
+                process_button_reset = gr.ClearButton(
+                    [
+                        source_image_input,
+                        source_video_input,
+                        webcam_input,
+                        webcam_toggle,
+                        driving_pickle_input,
+                        driving_video_input,
+                        driving_image_input,
+                    ],
+                    value="Clear",
+                )
 
+            gr.HTML('<div class="cyber-kicker" style="margin-top:18px;">04 / Final signal</div>')
+            output_video_i2v = gr.Video(
+                autoplay=False,
+                label="Animated video / original image space",
+                elem_id="output-video",
+            )
+            output_video_concat_i2v = gr.Video(
+                autoplay=False,
+                label="Animated video / composited result",
+                elem_id="output-video-secondary",
+            )
+            output_image_i2i = gr.Image(
+                format="png",
+                type="numpy",
+                label="Animated image / original image space",
+                visible=False,
+            )
+            output_image_concat_i2i = gr.Image(
+                format="png",
+                type="numpy",
+                label="Animated image / composited result",
+                visible=False,
+            )
+
+    with gr.Accordion("Retargeting lab", open=False):
+        gr.Markdown("Fine-tune eye and lip openness against a target portrait.")
+        with gr.Row():
+            eye_retargeting_slider.render()
+            lip_retargeting_slider.render()
+        with gr.Row():
+            with gr.Column():
+                retargeting_input_image.render()
+            with gr.Column():
+                output_image.render()
+            with gr.Column():
+                output_image_paste_back.render()
+        with gr.Row():
+            process_button_retargeting = gr.Button(
+                "RUN RETARGETING",
+                variant="primary",
+                elem_id="retarget-button",
+            )
+            process_button_reset_retargeting = gr.ClearButton(
+                [
+                    eye_retargeting_slider,
+                    lip_retargeting_slider,
+                    retargeting_input_image,
+                    output_image,
+                    output_image_paste_back,
+                ],
+                value="Clear retargeting",
+            )
+
+    webcam_toggle.change(
+        lambda enabled: (
+            gr.update(visible=enabled),
+            gr.update(visible=not enabled),
+        ),
+        inputs=[webcam_toggle],
+        outputs=[webcam_input, source_video_input],
+    )
     flag_is_animal.change(change_animal_model, inputs=[flag_is_animal])
-    # binding functions for buttons
+
     process_button_retargeting.click(
-        # fn=gradio_pipeline.execute_image,
         fn=gpu_wrapped_execute_image,
         inputs=[eye_retargeting_slider, lip_retargeting_slider, retargeting_input_image, flag_do_crop_input],
         outputs=[output_image, output_image_paste_back],
-        show_progress=True
+        show_progress=True,
     )
     process_button_animation.click(
         fn=gpu_wrapped_execute_video,
         inputs=[
             source_image_input,
             source_video_input,
+            webcam_toggle,
+            webcam_input,
             driving_video_input,
             driving_image_input,
             driving_pickle_input,
@@ -354,16 +899,25 @@ with gr.Blocks(theme=gr.themes.Soft(font=[gr.themes.GoogleFont("Plus Jakarta San
             tab_selection,
             v_tab_selection,
             cfg_scale,
-            voice_name
+            voice_name,
         ],
-        outputs=[output_video_i2v, output_video_i2v, output_video_concat_i2v, output_video_concat_i2v,
-                 output_image_i2i, output_image_i2i, output_image_concat_i2i, output_image_concat_i2i],
-        show_progress=True
+        outputs=[
+            output_video_i2v,
+            output_video_i2v,
+            output_video_concat_i2v,
+            output_video_concat_i2v,
+            output_image_i2i,
+            output_image_i2i,
+            output_image_concat_i2i,
+            output_image_concat_i2i,
+        ],
+        show_progress=True,
     )
+
 
 if __name__ == '__main__':
     demo.launch(
         server_port=args.port,
         share=False,
-        server_name=args.host_ip
+        server_name=args.host_ip,
     )
