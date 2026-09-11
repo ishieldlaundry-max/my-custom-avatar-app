@@ -1,0 +1,39 @@
+PS C:\Users\emman\FasterLivePortrait-local> cd "$env:USERPROFILE\FasterLivePortrait-local"
+PS C:\Users\emman\FasterLivePortrait-local> nvidia-smi
+Sat Sep 12 00:49:03 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 596.08                 Driver Version: 596.08         CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...  WDDM  |   00000000:01:00.0  On |                  N/A |
+| N/A   47C    P0             16W /  140W |    1250MiB /   8188MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            2508    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            2976    C+G   ...Browser\Application\brave.exe      N/A      |
+|    0   N/A  N/A           10472    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A           11652    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A           14520    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A           14528    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           19080    C+G   ....Instrumentation.SubAgent.exe      N/A      |
+|    0   N/A  N/A           20140    C+G   ...5n1h2txyewy\TextInputHost.exe      N/A      |
+|    0   N/A  N/A           20288    C+G   ...erControlCenter_v2\Killer.exe      N/A      |
+|    0   N/A  N/A           24936    C+G   ...xyewy\ShellExperienceHost.exe      N/A      |
+|    0   N/A  N/A           27680    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           35068    C+G   ...Browser\Application\brave.exe      N/A      |
+|    0   N/A  N/A           42220    C+G   ...IA app\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           47624    C+G   ...IA app\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           51656    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
+|    0   N/A  N/A           75376    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A           75580    C+G   ...rz1tebttyb220\DolbyAccess.exe      N/A      |
+|    0   N/A  N/A           78588    C+G   ...t\Edge\Application\msedge.exe      N/A      |
++-----------------------------------------------------------------------------------------+
