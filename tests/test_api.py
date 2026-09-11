@@ -14,6 +14,19 @@ import sys
 import pytest
 
 
+def _assert_non_empty_video_zip(response):
+    assert response.status_code == 200
+    with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
+        video_outputs = [
+            name for name in zip_ref.namelist()
+            if name.lower().endswith((".mp4", ".mov", ".webm", ".avi"))
+            and not name.endswith("/")
+        ]
+        assert video_outputs, "API returned no output video"
+        assert all(zip_ref.getinfo(name).file_size > 0 for name in video_outputs)
+        return zip_ref
+
+
 def test_with_pickle_animal():
     try:
         data = {
@@ -58,9 +71,7 @@ def test_with_pickle_animal():
         # 发送 POST 请求
         response = requests.post("http://127.0.0.1:9871/predict/", files=files, data=data)
         response.raise_for_status()
-        with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
-            output_names = [name for name in zip_ref.namelist() if not name.endswith("/")]
-            assert output_names, "API returned an empty ZIP archive"
+        with _assert_non_empty_video_zip(response) as zip_ref:
             # save files for each request in a different folder
             dt = datetime.datetime.now()
             ts = int(dt.timestamp())
@@ -96,14 +107,27 @@ def test_with_video_animal():
             'driving_smooth_observation_variance': 1e-7
         }
         source_image_path = "./assets/examples/source/s39.jpg"
-        driving_video_path = "./assets/examples/driving/d0.mp4"
+        driving_video_path = os.environ.get(
+            "FLIP_API_VIDEO_FIXTURE",
+            "./assets/examples/driving/d0-smoke.mp4",
+        )
+        if not os.path.exists(driving_video_path):
+            subprocess.run(
+                [
+                    "bash",
+                    "scripts/generate_api_smoke_video.sh",
+                    "./assets/examples/driving/d0.mp4",
+                    driving_video_path,
+                ],
+                check=True,
+            )
         files = {
             'source_image': open(source_image_path, 'rb'),
             'driving_video': open(driving_video_path, 'rb')
         }
         response = requests.post("http://127.0.0.1:9871/predict/", files=files, data=data)
         response.raise_for_status()
-        with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
+        with _assert_non_empty_video_zip(response) as zip_ref:
             # save files for each request in a different folder
             dt = datetime.datetime.now()
             ts = int(dt.timestamp())
@@ -139,14 +163,27 @@ def test_with_video_human():
             'driving_smooth_observation_variance': 1e-7
         }
         source_image_path = "./assets/examples/source/s11.jpg"
-        driving_video_path = "./assets/examples/driving/d0.mp4"
+        driving_video_path = os.environ.get(
+            "FLIP_API_VIDEO_FIXTURE",
+            "./assets/examples/driving/d0-smoke.mp4",
+        )
+        if not os.path.exists(driving_video_path):
+            subprocess.run(
+                [
+                    "bash",
+                    "scripts/generate_api_smoke_video.sh",
+                    "./assets/examples/driving/d0.mp4",
+                    driving_video_path,
+                ],
+                check=True,
+            )
         files = {
             'source_image': open(source_image_path, 'rb'),
             'driving_video': open(driving_video_path, 'rb')
         }
         response = requests.post("http://127.0.0.1:9871/predict/", files=files, data=data)
         response.raise_for_status()
-        with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
+        with _assert_non_empty_video_zip(response) as zip_ref:
             # save files for each request in a different folder
             dt = datetime.datetime.now()
             ts = int(dt.timestamp())

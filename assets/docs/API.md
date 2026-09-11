@@ -65,5 +65,20 @@ pytest -q tests/test_api.py
 ```
 
 The pickle test regenerates `assets/examples/driving/d8.pkl` when it is absent.
-All three integration tests require the API to be running on
-`127.0.0.1:9871` and return a ZIP archive containing generated outputs.
+The video tests use the three-frame
+`assets/examples/driving/d0-smoke.mp4` fixture by default so CPU smoke checks
+stay within the validation window. The full-length `d0.mp4` path remains
+available for production validation:
+
+```shell
+FLIP_API_VIDEO_FIXTURE=assets/examples/driving/d0.mp4 pytest -q tests/test_api.py
+```
+
+If the smoke fixture is absent, regenerate it with:
+
+```shell
+bash scripts/generate_api_smoke_video.sh
+```
+
+All integration tests require the API to be running on `127.0.0.1:9871` and
+verify a 200 response containing at least one non-empty output video.
