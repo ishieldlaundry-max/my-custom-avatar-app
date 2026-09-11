@@ -6,3 +6,7 @@ packages = ["abseil-cpp", "antlr", "espeak-ng", "ffmpeg-full", "gtest", "jre", "
 
 [agent]
 expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 30000
