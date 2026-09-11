@@ -2,6 +2,7 @@ modules = ["python-3.12", "bash"]
 
 [nix]
 channel = "stable-25_05"
+packages = ["abseil-cpp", "antlr", "espeak-ng", "ffmpeg-full", "gtest", "jre", "libGL", "libGLU", "libsndfile", "libxcrypt"]
 
 [agent]
 expertMode = true

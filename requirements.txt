@@ -16,3 +16,9 @@ phonemizer
 kokoro>=0.3.4
 misaki[ja]
 misaki[zh]
+colorama
+fastapi
+ffmpeg
+pydantic
+tqdm
+uvicorn
