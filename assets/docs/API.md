@@ -39,3 +39,23 @@ The return is a compressed package, by default unzipped to `./results/api_*`. Co
 * `test_with_video_animal()`, image and video driving. Set `flag_pickle=False`. It will additionally return the driving video's pkl file, which can be called directly next time.
 * `test_with_pkl_animal()`, image and pkl driving.
 * `test_with_video_human()`, image and video driving under the Human model, set `flag_is_animal=False`
+
+### Replit and CPU-only verification prerequisites
+The API entrypoint currently starts with `configs/trt_infer.yaml` and initializes the TensorRT pipeline during application startup. A successful inference check therefore requires all of the following:
+
+* Python dependencies from `requirements.txt`, plus a compatible PyTorch, CUDA, TensorRT, and TensorRT grid-sample plugin installation.
+* An NVIDIA GPU with working drivers and CUDA libraries.
+* The FasterLivePortrait checkpoint tree downloaded under `./checkpoints` (or the directory selected with `FLIP_CHECKPOINT_DIR`), with the ONNX files converted to the TensorRT files referenced by `configs/trt_infer.yaml`.
+* `ffmpeg` available on `PATH`.
+
+On a CPU-only Replit runtime, `bash scripts/start_api.sh` cannot provide a real inference server because the default mode is TensorRT and `pycuda`/TensorRT require CUDA headers and libraries. Install the complete GPU/model prerequisites before treating a connection refusal as an API result.
+
+Run the checks from the repository root:
+
+```shell
+bash scripts/start_api.sh
+# in a second shell, after "Application startup complete":
+pytest -q tests/test_api.py
+```
+
+The pickle test skips when `assets/examples/driving/d8.pkl` is not present; the repository currently includes the video fixtures but not that pickle fixture. The two video tests require the API to be running on `127.0.0.1:9871` and return a ZIP archive containing the generated outputs.

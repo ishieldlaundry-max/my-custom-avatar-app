@@ -8,6 +8,7 @@ import zipfile
 from io import BytesIO
 import datetime
 import json
+import pytest
 
 
 def test_with_pickle_animal():
@@ -32,6 +33,8 @@ def test_with_pickle_animal():
         }
         source_image_path = "./assets/examples/source/s39.jpg"
         driving_pickle_path = "./assets/examples/driving/d8.pkl"
+        if not os.path.exists(driving_pickle_path):
+            pytest.skip(f"missing integration fixture: {driving_pickle_path}")
 
         # 打开文件
         files = {
@@ -51,8 +54,10 @@ def test_with_pickle_animal():
             zip_ref.extractall(tgt)
             print("Extracted files into", tgt)
 
+    except requests.exceptions.ConnectionError as e:
+        pytest.skip(f"API server unavailable at http://127.0.0.1:9871: {e}")
     except requests.exceptions.RequestException as e:
-        print(f"Request Error: {e}")
+        pytest.fail(f"API request failed: {e}")
 
 
 def test_with_video_animal():
@@ -92,8 +97,10 @@ def test_with_video_animal():
             zip_ref.extractall(tgt)
             print("Extracted files into", tgt)
 
+    except requests.exceptions.ConnectionError as e:
+        pytest.skip(f"API server unavailable at http://127.0.0.1:9871: {e}")
     except requests.exceptions.RequestException as e:
-        print(f"Request Error: {e}")
+        pytest.fail(f"API request failed: {e}")
 
 
 def test_with_video_human():
@@ -133,8 +140,10 @@ def test_with_video_human():
             zip_ref.extractall(tgt)
             print("Extracted files into", tgt)
 
+    except requests.exceptions.ConnectionError as e:
+        pytest.skip(f"API server unavailable at http://127.0.0.1:9871: {e}")
     except requests.exceptions.RequestException as e:
-        print(f"Request Error: {e}")
+        pytest.fail(f"API request failed: {e}")
 
 
 if __name__ == '__main__':

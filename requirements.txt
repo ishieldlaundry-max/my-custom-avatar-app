@@ -20,5 +20,8 @@ colorama
 fastapi
 ffmpeg
 pydantic
+pytest
+python-multipart
+requests
 tqdm
 uvicorn
