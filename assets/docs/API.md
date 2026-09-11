@@ -37,7 +37,12 @@ Ensure that your machine has Nvidia GPU drivers installed. CUDA version should b
 Refer to `tests/test_api.py`. The default is the Animal model, but now it also supports the Human model.
 The return is a compressed package, by default unzipped to `./results/api_*`. Confirm according to the actual printed log.
 * `test_with_video_animal()`, image and video driving. Set `flag_pickle=False`. It will additionally return the driving video's pkl file, which can be called directly next time.
-* `test_with_pkl_animal()`, image and pkl driving.
+* `test_with_pkl_animal()`, image and pkl driving. The checked-in `d8.pkl`
+  is a small neutral one-frame fixture generated without model files. To
+  regenerate it deterministically:
+  ```shell
+  python scripts/generate_pickle_fixture.py
+  ```
 * `test_with_video_human()`, image and video driving under the Human model, set `flag_is_animal=False`
 
 ### Replit and CPU-only verification prerequisites
