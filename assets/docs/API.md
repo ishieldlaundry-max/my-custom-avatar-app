@@ -82,3 +82,15 @@ bash scripts/generate_api_smoke_video.sh
 
 All integration tests require the API to be running on `127.0.0.1:9871` and
 verify a 200 response containing at least one non-empty output video.
+
+### Readiness
+
+Before submitting to `/predict/`, clients can query `GET /health/ready`.
+It returns `200` only when inference is ready and `503` while startup is
+`starting` or has `failed`. The JSON response includes:
+
+* `status`: `starting`, `ready`, or `failed`
+* `backend`: the selected `onnx` or `tensorrt` backend and provider
+* `checkpoints.status`: checkpoint initialization progress
+* `plugin.status`: TensorRT plugin status, or `not_required` for ONNX
+* `error`: a non-secret startup error summary when `status` is `failed`

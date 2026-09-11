@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, FastAPI, Request, Response, UploadFile
 from fastapi import File, Body, Form
 from omegaconf import OmegaConf
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from zipfile import ZipFile
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 from src.utils.utils import video_has_audio
@@ -40,7 +40,14 @@ logger_f = logger.get_logger("faster_liveportrait_api", log_file=os.path.join(lo
 
 app = FastAPI()
 
-global pipe
+pipe = None
+readiness_state = {
+    "status": "starting",
+    "backend": {"name": None, "provider": None},
+    "checkpoints": {"status": "pending"},
+    "plugin": {"required": None, "status": "pending"},
+    "error": None,
+}
 
 if platform.system().lower() == 'windows':
     FFMPEG = "third_party/ffmpeg-7.0.1-full_build/bin/ffmpeg.exe"
@@ -134,6 +141,33 @@ def select_infer_config():
     return os.path.join(project_dir, "configs/onnx_infer.yaml")
 
 
+def backend_metadata(config_path):
+    """Return safe, client-facing backend information for a config path."""
+    config_name = os.path.basename(config_path).lower()
+    if "trt" in config_name:
+        return {
+            "name": "tensorrt",
+            "provider": "TensorRTExecutionProvider",
+            "plugin_required": True,
+        }
+    return {
+        "name": "onnx",
+        "provider": "CPUExecutionProvider",
+        "plugin_required": False,
+    }
+
+
+def update_readiness(**updates):
+    """Update readiness fields without exposing configuration secrets."""
+    readiness_state.update(updates)
+
+
+def readiness_response():
+    """Return the current readiness payload and its HTTP status."""
+    status_code = 200 if readiness_state["status"] == "ready" else 503
+    return JSONResponse(content=readiness_state, status_code=status_code)
+
+
 def convert_onnx_to_trt_models(infer_cfg):
     ret = True
     for name in infer_cfg.models:
@@ -199,30 +233,79 @@ def convert_onnx_to_trt_models(infer_cfg):
 @app.on_event("startup")
 async def startup_event():
     global pipe
-    cfg_file = select_infer_config()
-    logger_f.info(f"using inference config: {cfg_file}")
-    infer_cfg = OmegaConf.load(cfg_file)
-    checkpoints_exist = check_all_checkpoints_exist(infer_cfg)
+    try:
+        cfg_file = select_infer_config()
+        backend = backend_metadata(cfg_file)
+        update_readiness(
+            backend={
+                "name": backend["name"],
+                "provider": backend["provider"],
+            },
+            checkpoints={"status": "checking"},
+            plugin={
+                "required": backend["plugin_required"],
+                "status": "checking" if backend["plugin_required"] else "not_required",
+            },
+            error=None,
+        )
+        logger_f.info(f"using inference config: {cfg_file}")
+        infer_cfg = OmegaConf.load(cfg_file)
+        checkpoints_exist = check_all_checkpoints_exist(infer_cfg)
 
-    # first: download model if not exist
-    if not checkpoints_exist:
-        download_cmd = f"huggingface-cli download warmshao/FasterLivePortrait --local-dir {checkpoints_dir}"
-        logger_f.info(f"download model: {download_cmd}")
-        result = subprocess.run(download_cmd, shell=True, check=True)
-        # 检查结果
-        if result.returncode == 0:
+        # First: download models if they are not present.
+        if not checkpoints_exist:
+            update_readiness(checkpoints={"status": "downloading"})
+            download_cmd = f"huggingface-cli download warmshao/FasterLivePortrait --local-dir {checkpoints_dir}"
+            logger_f.info(f"download model: {download_cmd}")
+            result = subprocess.run(download_cmd, shell=True, check=True)
+            if result.returncode != 0:
+                raise RuntimeError("checkpoint download failed")
             logger_f.info(f"Download checkpoints to {checkpoints_dir} successful")
-        else:
-            logger_f.error(f"Download checkpoints to {checkpoints_dir} failed")
-            exit(1)
-    # second: convert onnx model to trt
-    convert_ret = convert_onnx_to_trt_models(infer_cfg)
-    if not convert_ret:
-        logger_f.error(f"convert onnx model to trt failed")
-        exit(1)
 
-    infer_cfg.infer_params.flag_pasteback = True
-    pipe = FasterLivePortraitPipeline(cfg=infer_cfg, is_animal=True)
+        update_readiness(checkpoints={"status": "ready"})
+
+        # TensorRT uses the grid-sample plugin loaded by its predictor. ONNX
+        # Runtime does not require that plugin.
+        if backend["plugin_required"]:
+            plugin_name = (
+                "grid_sample_3d_plugin.dll"
+                if platform.system().lower() == "windows"
+                else "libgrid_sample_3d_plugin.so"
+            )
+            plugin_path = os.path.join(
+                checkpoints_dir, "liveportrait_onnx", plugin_name
+            )
+            if not os.path.exists(plugin_path):
+                raise RuntimeError("TensorRT grid-sample plugin is unavailable")
+            update_readiness(plugin={"required": True, "status": "ready"})
+
+        # Convert ONNX models only for the TensorRT backend.
+        if backend["plugin_required"]:
+            convert_ret = convert_onnx_to_trt_models(infer_cfg)
+            if not convert_ret:
+                raise RuntimeError("TensorRT model conversion failed")
+
+        infer_cfg.infer_params.flag_pasteback = True
+        pipe = FasterLivePortraitPipeline(cfg=infer_cfg, is_animal=True)
+        update_readiness(status="ready")
+    except Exception as exc:
+        pipe = None
+        logger_f.exception("inference startup failed")
+        update_readiness(
+            status="failed",
+            checkpoints={"status": "failed"},
+            plugin={
+                "required": readiness_state["plugin"]["required"],
+                "status": "failed",
+            },
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Report whether the inference pipeline can accept portrait requests."""
+    return readiness_response()
 
 
 def run_with_video(source_image_path, driving_video_path, save_dir):
@@ -414,6 +497,9 @@ async def upload_files(
         vy_ratio_crop_driving_video: float = Form(...),
         driving_smooth_observation_variance: float = Form(...)
 ):
+    if readiness_state["status"] != "ready" or pipe is None:
+        return readiness_response()
+
     # 根据传入的表单参数构建 infer_params
     infer_params = LivePortraitParams(
         flag_is_animal=flag_is_animal,
@@ -434,7 +520,6 @@ async def upload_files(
         driving_smooth_observation_variance=driving_smooth_observation_variance
     )
 
-    global pipe
     pipe.init_vars()
     if infer_params.flag_is_animal != pipe.is_animal:
         pipe.init_models(is_animal=infer_params.flag_is_animal)
