@@ -199,9 +199,23 @@ with gr.Blocks(theme=gr.themes.Soft(font=[gr.themes.GoogleFont("Plus Jakarta San
                         driving_text_input = gr.Textbox(value="Hi, I am created by Faster LivePortrait!",
                                                         label="Driving Text")
                         voice_dir = "checkpoints/Kokoro-82M/voices/"
-                        voice_names = [os.path.splitext(vname)[0] for vname in os.listdir(voice_dir) if vname.endswith(".pt")]
+                        voice_names = [
+                            os.path.splitext(vname)[0]
+                            for vname in os.listdir(voice_dir)
+                            if vname.endswith(".pt")
+                        ] if osp.isdir(voice_dir) else []
+                        if not voice_names:
+                            gr.Markdown(
+                                "Kokoro voice assets are not installed. "
+                                "Use video, image, pickle, or audio driving, "
+                                "or download the optional Kokoro-82M model."
+                            )
                         voice_name = gr.Dropdown(
-                            choices=voice_names, value='af_heart', label="Voice Name")
+                            choices=voice_names,
+                            value=voice_names[0] if voice_names else None,
+                            label="Voice Name",
+                            interactive=bool(voice_names),
+                        )
 
                 v_tab_selection = gr.Textbox(value="Video", visible=False)
                 v_tab_video.select(lambda: "Video", None, v_tab_selection)
