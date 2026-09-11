@@ -1,0 +1,320 @@
+PS C:\WINDOWS\system32> $installer = "$env:USERPROFILE\Downloads\python-3.10.11-amd64.exe"
+>>
+>> Invoke-WebRequest `
+>>   -Uri "https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe" `
+>>   -OutFile $installer
+>>
+>> Start-Process $installer -Verb RunAs
+PS C:\WINDOWS\system32> py -3.10 --version
+Python 3.10.11
+PS C:\WINDOWS\system32> https://github.com/ishieldlaundry-max/my-custom-avatar-app
+https://github.com/ishieldlaundry-max/my-custom-avatar-app : The term
+'https://github.com/ishieldlaundry-max/my-custom-avatar-app' is not recognized as the name of a cmdlet, function,
+script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is
+correct and try again.
+At line:1 char:1
++ https://github.com/ishieldlaundry-max/my-custom-avatar-app
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (https://github....stom-avatar-app:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\WINDOWS\system32> cd $env:USERPROFILE
+PS C:\Users\emman> git clone https://github.com/ishieldlaundry-max/my-custom-avatar-app.git FasterLivePortrait-local
+Cloning into 'FasterLivePortrait-local'...
+remote: Enumerating objects: 282, done.
+remote: Counting objects: 100% (282/282), done.
+remote: Compressing objects: 100% (199/199), done.
+remote: Total 282 (delta 92), reused 266 (delta 78), pack-reused 0 (from 0)
+Receiving objects: 100% (282/282), 28.82 MiB | 321.00 KiB/s, done.
+Resolving deltas: 100% (92/92), done.
+PS C:\Users\emman> cd .\FasterLivePortrait-local
+PS C:\Users\emman\FasterLivePortrait-local> Get-ChildItem
+
+
+    Directory: C:\Users\emman\FasterLivePortrait-local
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----         9/12/2026  12:41 AM                .agents
+d-----         9/12/2026  12:41 AM                assets
+d-----         9/12/2026  12:41 AM                attached_assets
+d-----         9/12/2026  12:41 AM                configs
+d-----         9/12/2026  12:41 AM                scripts
+d-----         9/12/2026  12:41 AM                src
+d-----         9/12/2026  12:41 AM                tests
+-a----         9/12/2026  12:41 AM            182 .gitignore
+-a----         9/12/2026  12:41 AM            994 .replit
+-a----         9/12/2026  12:41 AM          26022 api.py
+-a----         9/12/2026  12:41 AM            809 camera.bat
+-a----         9/12/2026  12:41 AM            239 DockerfileAPI
+-a----         9/12/2026  12:41 AM           1582 LICENSE
+-a----         9/12/2026  12:41 AM          14522 README.md
+-a----         9/12/2026  12:41 AM          12744 README_ZH.md
+-a----         9/12/2026  12:41 AM           1312 replit.md
+-a----         9/12/2026  12:41 AM            599 requirements.txt
+-a----         9/12/2026  12:41 AM            217 requirements_macos.txt
+-a----         9/12/2026  12:41 AM            204 requirements_win.txt
+-a----         9/12/2026  12:41 AM          15256 run.py
+-a----         9/12/2026  12:41 AM            243 update.bat
+-a----         9/12/2026  12:41 AM             39 webui.bat
+-a----         9/12/2026  12:41 AM          34751 webui.py
+
+
+PS C:\Users\emman\FasterLivePortrait-local> Test-Path .\webui.py
+True
+PS C:\Users\emman\FasterLivePortrait-local> py -3.10 -m venv venv
+PS C:\Users\emman\FasterLivePortrait-local> .\venv\Scripts\python.exe --version
+Python 3.10.11
+PS C:\Users\emman\FasterLivePortrait-local> .\venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+Requirement already satisfied: pip in c:\users\emman\fasterliveportrait-local\venv\lib\site-packages (23.0.1)
+Collecting pip
+  Downloading pip-26.2.1-py3-none-any.whl (1.8 MB)
+     ---------------------------------------- 1.8/1.8 MB 797.5 kB/s eta 0:00:00
+Requirement already satisfied: setuptools in c:\users\emman\fasterliveportrait-local\venv\lib\site-packages (65.5.0)
+Collecting setuptools
+  Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+     ---------------------------------------- 818.2/818.2 kB 1.7 MB/s eta 0:00:00
+Collecting wheel
+  Downloading wheel-0.48.0-py3-none-any.whl (33 kB)
+Collecting packaging>=24.0
+  Downloading packaging-26.3-py3-none-any.whl (129 kB)
+     ---------------------------------------- 130.0/130.0 kB 1.5 MB/s eta 0:00:00
+Installing collected packages: setuptools, pip, packaging, wheel
+  Attempting uninstall: setuptools
+    Found existing installation: setuptools 65.5.0
+    Uninstalling setuptools-65.5.0:
+      Successfully uninstalled setuptools-65.5.0
+  Attempting uninstall: pip
+    Found existing installation: pip 23.0.1
+    Uninstalling pip-23.0.1:
+      Successfully uninstalled pip-23.0.1
+Successfully installed packaging-26.3 pip-26.2.1 setuptools-84.0.0 wheel-0.48.0
+PS C:\Users\emman\FasterLivePortrait-local> .\venv\Scripts\python.exe -m pip install -r requirements_win.txt
+Collecting ffmpeg-python (from -r requirements_win.txt (line 1))
+  Downloading ffmpeg_python-0.2.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting omegaconf (from -r requirements_win.txt (line 2))
+  Downloading omegaconf-2.3.1-py3-none-any.whl.metadata (4.5 kB)
+Collecting onnx (from -r requirements_win.txt (line 3))
+  Downloading onnx-1.22.0-cp310-cp310-win_amd64.whl.metadata (8.5 kB)
+Collecting numpy (from -r requirements_win.txt (line 4))
+  Downloading numpy-2.2.6-cp310-cp310-win_amd64.whl.metadata (60 kB)
+Collecting opencv-python (from -r requirements_win.txt (line 5))
+  Downloading opencv_python-5.0.0.93-cp37-abi3-win_amd64.whl.metadata (20 kB)
+Collecting gradio (from -r requirements_win.txt (line 6))
+  Downloading gradio-6.27.0-py3-none-any.whl.metadata (17 kB)
+Collecting scikit-image (from -r requirements_win.txt (line 7))
+  Downloading scikit_image-0.25.2-cp310-cp310-win_amd64.whl.metadata (14 kB)
+Collecting insightface (from -r requirements_win.txt (line 8))
+  Downloading insightface-2.0-py3-none-any.whl.metadata (9.8 kB)
+Collecting mediapipe (from -r requirements_win.txt (line 10))
+  Downloading mediapipe-1.0.1-py3-none-win_amd64.whl.metadata (10 kB)
+Collecting torchgeometry (from -r requirements_win.txt (line 11))
+  Downloading torchgeometry-0.1.2-py2.py3-none-any.whl.metadata (2.9 kB)
+Collecting soundfile (from -r requirements_win.txt (line 12))
+  Downloading soundfile-0.14.0-py2.py3-none-win_amd64.whl.metadata (18 kB)
+Collecting munch (from -r requirements_win.txt (line 13))
+  Downloading munch-4.0.0-py2.py3-none-any.whl.metadata (5.9 kB)
+Collecting phonemizer (from -r requirements_win.txt (line 14))
+  Downloading phonemizer-3.4.0-py3-none-any.whl.metadata (48 kB)
+Collecting kokoro>=0.3.4 (from -r requirements_win.txt (line 15))
+  Downloading kokoro-0.9.4-py3-none-any.whl.metadata (21 kB)
+Collecting huggingface_hub[cli] (from -r requirements_win.txt (line 9))
+  Downloading huggingface_hub-1.31.0-py3-none-any.whl.metadata (16 kB)
+Collecting misaki[ja] (from -r requirements_win.txt (line 16))
+  Downloading misaki-0.9.4-py3-none-any.whl.metadata (19 kB)
+Collecting future (from ffmpeg-python->-r requirements_win.txt (line 1))
+  Downloading future-1.0.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting antlr4-python3-runtime==4.9.* (from omegaconf->-r requirements_win.txt (line 2))
+  Downloading antlr4-python3-runtime-4.9.3.tar.gz (117 kB)
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+Collecting PyYAML>=5.1.0 (from omegaconf->-r requirements_win.txt (line 2))
+  Downloading pyyaml-6.0.3-cp310-cp310-win_amd64.whl.metadata (2.4 kB)
+Collecting protobuf>=4.25.1 (from onnx->-r requirements_win.txt (line 3))
+  Downloading protobuf-7.36.1-cp310-abi3-win_amd64.whl.metadata (595 bytes)
+Collecting typing_extensions>=4.15.0 (from onnx->-r requirements_win.txt (line 3))
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting ml_dtypes>=0.5.4 (from onnx->-r requirements_win.txt (line 3))
+  Downloading ml_dtypes-0.6.0-cp310-cp310-win_amd64.whl.metadata (8.8 kB)
+Collecting anyio<5.0,>=3.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+Collecting brotli>=1.1.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading brotli-1.2.0-cp310-cp310-win_amd64.whl.metadata (6.3 kB)
+Collecting fastapi<1.0,>=0.115.2 (from gradio->-r requirements_win.txt (line 6))
+  Downloading fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+Collecting gradio-client==2.7.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading gradio_client-2.7.0-py3-none-any.whl.metadata (7.1 kB)
+Collecting groovy~=0.1 (from gradio->-r requirements_win.txt (line 6))
+  Downloading groovy-0.1.2-py3-none-any.whl.metadata (6.1 kB)
+Collecting hf-gradio<1.0,>=0.4.1 (from gradio->-r requirements_win.txt (line 6))
+  Downloading hf_gradio-0.4.1-py3-none-any.whl.metadata (428 bytes)
+Collecting httpx<1.0,>=0.24.1 (from gradio->-r requirements_win.txt (line 6))
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting jinja2<4.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting markupsafe<4.0,>=2.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading markupsafe-3.0.3-cp310-cp310-win_amd64.whl.metadata (2.8 kB)
+Collecting orjson~=3.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading orjson-3.12.0-cp310-cp310-win_amd64.whl.metadata (43 kB)
+Requirement already satisfied: packaging in .\venv\lib\site-packages (from gradio->-r requirements_win.txt (line 6)) (26.3)
+Collecting pandas<4.0,>=1.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading pandas-2.3.3-cp310-cp310-win_amd64.whl.metadata (19 kB)
+Collecting pillow<13.0,>=8.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading pillow-12.3.0-cp310-cp310-win_amd64.whl.metadata (9.3 kB)
+Collecting pydantic<=3.0,>=2.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+Collecting pydub<1.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading pydub-0.25.1-py2.py3-none-any.whl.metadata (1.4 kB)
+Collecting python-multipart<1.0,>=0.0.18 (from gradio->-r requirements_win.txt (line 6))
+  Downloading python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+Collecting pytz>=2017.2 (from gradio->-r requirements_win.txt (line 6))
+  Downloading pytz-2026.3.post1-py2.py3-none-any.whl.metadata (22 kB)
+Collecting safehttpx<0.2.0,>=0.1.7 (from gradio->-r requirements_win.txt (line 6))
+  Downloading safehttpx-0.1.7-py3-none-any.whl.metadata (4.2 kB)
+Collecting semantic-version~=2.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading semantic_version-2.10.0-py2.py3-none-any.whl.metadata (9.7 kB)
+Collecting starlette<2.0,>=1.0.1 (from gradio->-r requirements_win.txt (line 6))
+  Downloading starlette-1.6.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting tomlkit<0.15.0,>=0.12.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading tomlkit-0.14.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting typer<1.0,>=0.12 (from gradio->-r requirements_win.txt (line 6))
+  Downloading typer-0.27.2-py3-none-any.whl.metadata (16 kB)
+Collecting uvicorn>=0.14.0 (from gradio->-r requirements_win.txt (line 6))
+  Downloading uvicorn-0.52.4-py3-none-any.whl.metadata (6.6 kB)
+Collecting fsspec (from gradio-client==2.7.0->gradio->-r requirements_win.txt (line 6))
+  Downloading fsspec-2026.7.0-py3-none-any.whl.metadata (10 kB)
+Collecting exceptiongroup>=1.0.2 (from anyio<5.0,>=3.0->gradio->-r requirements_win.txt (line 6))
+  Downloading exceptiongroup-1.3.1-py3-none-any.whl.metadata (6.7 kB)
+Collecting idna>=2.8 (from anyio<5.0,>=3.0->gradio->-r requirements_win.txt (line 6))
+  Downloading idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+Collecting typing-inspection>=0.4.2 (from fastapi<1.0,>=0.115.2->gradio->-r requirements_win.txt (line 6))
+  Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-doc>=0.0.2 (from fastapi<1.0,>=0.115.2->gradio->-r requirements_win.txt (line 6))
+  Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi (from httpx<1.0,>=0.24.1->gradio->-r requirements_win.txt (line 6))
+  Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx<1.0,>=0.24.1->gradio->-r requirements_win.txt (line 6))
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1.0,>=0.24.1->gradio->-r requirements_win.txt (line 6))
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting click<9.0.0,>=8.4.2 (from huggingface_hub[cli]->-r requirements_win.txt (line 9))
+  Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting filelock>=3.10.0 (from huggingface_hub[cli]->-r requirements_win.txt (line 9))
+  Downloading filelock-3.32.6-py3-none-any.whl.metadata (2.0 kB)
+Collecting hf-xet<2.0.0,>=1.5.2 (from huggingface_hub[cli]->-r requirements_win.txt (line 9))
+  Downloading hf_xet-1.6.0-cp38-abi3-win_amd64.whl.metadata (4.9 kB)
+Collecting tqdm>=4.42.1 (from huggingface_hub[cli]->-r requirements_win.txt (line 9))
+  Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+Collecting python-dateutil>=2.8.2 (from pandas<4.0,>=1.0->gradio->-r requirements_win.txt (line 6))
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting tzdata>=2022.7 (from pandas<4.0,>=1.0->gradio->-r requirements_win.txt (line 6))
+  Downloading tzdata-2026.3-py2.py3-none-any.whl.metadata (1.4 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<=3.0,>=2.0->gradio->-r requirements_win.txt (line 6))
+  Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.5 (from pydantic<=3.0,>=2.0->gradio->-r requirements_win.txt (line 6))
+  Downloading pydantic_core-2.46.5-cp310-cp310-win_amd64.whl.metadata (6.7 kB)
+Collecting shellingham>=1.3.0 (from typer<1.0,>=0.12->gradio->-r requirements_win.txt (line 6))
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting rich>=13.8.0 (from typer<1.0,>=0.12->gradio->-r requirements_win.txt (line 6))
+  Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+Collecting colorama (from typer<1.0,>=0.12->gradio->-r requirements_win.txt (line 6))
+  Downloading colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+Collecting scipy>=1.11.4 (from scikit-image->-r requirements_win.txt (line 7))
+  Downloading scipy-1.15.3-cp310-cp310-win_amd64.whl.metadata (60 kB)
+Collecting networkx>=3.0 (from scikit-image->-r requirements_win.txt (line 7))
+  Downloading networkx-3.4.2-py3-none-any.whl.metadata (6.3 kB)
+Collecting imageio!=2.35.0,>=2.33 (from scikit-image->-r requirements_win.txt (line 7))
+  Downloading imageio-2.37.4-py3-none-any.whl.metadata (9.6 kB)
+Collecting tifffile>=2022.8.12 (from scikit-image->-r requirements_win.txt (line 7))
+  Downloading tifffile-2025.5.10-py3-none-any.whl.metadata (31 kB)
+Collecting lazy-loader>=0.4 (from scikit-image->-r requirements_win.txt (line 7))
+  Downloading lazy_loader-0.5-py3-none-any.whl.metadata (5.9 kB)
+Collecting onnxruntime (from insightface->-r requirements_win.txt (line 8))
+  Downloading onnxruntime-1.23.2-cp310-cp310-win_amd64.whl.metadata (5.3 kB)
+Collecting requests (from insightface->-r requirements_win.txt (line 8))
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+WARNING: huggingface-hub 1.31.0 does not provide the extra 'cli'
+Collecting absl-py~=2.3 (from mediapipe->-r requirements_win.txt (line 10))
+  Downloading absl_py-2.5.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting sounddevice~=0.5 (from mediapipe->-r requirements_win.txt (line 10))
+  Downloading sounddevice-0.5.6-py3-none-win_amd64.whl.metadata (1.4 kB)
+Collecting flatbuffers~=25.9 (from mediapipe->-r requirements_win.txt (line 10))
+  Using cached flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+Collecting opencv-contrib-python (from mediapipe->-r requirements_win.txt (line 10))
+  Downloading opencv_contrib_python-5.0.0.93-cp37-abi3-win_amd64.whl.metadata (20 kB)
+Collecting matplotlib (from mediapipe->-r requirements_win.txt (line 10))
+  Downloading matplotlib-3.10.9-cp310-cp310-win_amd64.whl.metadata (52 kB)
+Collecting cffi (from sounddevice~=0.5->mediapipe->-r requirements_win.txt (line 10))
+  Downloading cffi-2.1.1-cp310-cp310-win_amd64.whl.metadata (2.6 kB)
+Collecting torch>=1.0.0 (from torchgeometry->-r requirements_win.txt (line 11))
+  Downloading torch-2.14.0-cp310-cp310-win_amd64.whl.metadata (38 kB)
+Collecting joblib (from phonemizer->-r requirements_win.txt (line 14))
+  Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting attrs>=18.1 (from phonemizer->-r requirements_win.txt (line 14))
+  Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting dlinfo (from phonemizer->-r requirements_win.txt (line 14))
+  Downloading dlinfo-2.0.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting loguru (from kokoro>=0.3.4->-r requirements_win.txt (line 15))
+  Downloading loguru-0.7.3-py3-none-any.whl.metadata (22 kB)
+Collecting transformers (from kokoro>=0.3.4->-r requirements_win.txt (line 15))
+  Downloading transformers-5.17.0-py3-none-any.whl.metadata (32 kB)
+Collecting addict (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading addict-2.4.0-py3-none-any.whl.metadata (1.0 kB)
+Collecting regex (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading regex-2026.9.10-cp310-cp310-win_amd64.whl.metadata (41 kB)
+Collecting fugashi (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading fugashi-1.5.2-cp310-cp310-win_amd64.whl.metadata (7.5 kB)
+Collecting jaconv (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading jaconv-0.5.0-py3-none-any.whl.metadata (8.9 kB)
+Collecting mojimoji (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading mojimoji-0.0.13-cp310-cp310-win_amd64.whl.metadata (3.6 kB)
+Collecting pyopenjtalk (from misaki[ja]->-r requirements_win.txt (line 16))
+  Downloading pyopenjtalk-0.4.1.tar.gz (1.4 MB)
+     ---------------------------------------- 1.4/1.4 MB 534.5 kB/s  0:00:03
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... error
+  error: subprocess-exited-with-error
+
+  × Getting requirements to build wheel did not run successfully.
+  │ exit code: 1
+  ╰─> [34 lines of output]
+      -- Building for: NMake Makefiles
+      CMake Error at CMakeLists.txt:17 (project):
+        Running
+
+         'nmake' '-?'
+
+        failed with:
+
+         no such file or directory
+
+
+      CMake Error: CMAKE_C_COMPILER not set, after EnableLanguage
+      CMake Error: CMAKE_CXX_COMPILER not set, after EnableLanguage
+      -- Configuring incomplete, errors occurred!
+      CMake is in the system path. Version:               cmake version 4.4.3
+
+      CMake suite maintained and supported by Kitware (kitware.com/cmake).
+      Traceback (most recent call last):
+        File "C:\Users\emman\FasterLivePortrait-local\venv\lib\site-packages\pip\_vendor\pyproject_hooks\_in_process\_in_process.py", line 389, in <module>
+          main()
+        File "C:\Users\emman\FasterLivePortrait-local\venv\lib\site-packages\pip\_vendor\pyproject_hooks\_in_process\_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+        File "C:\Users\emman\FasterLivePortrait-local\venv\lib\site-packages\pip\_vendor\pyproject_hooks\_in_process\_in_process.py", line 143, in get_requires_for_build_wheel
+          return hook(config_settings)
+        File "C:\Users\emman\AppData\Local\Temp\pip-build-env-5l8ufc_l\overlay\Lib\site-packages\setuptools\build_meta.py", line 333, in get_requires_for_build_wheel
+          return self._get_build_requires(config_settings, requirements=[])
+        File "C:\Users\emman\AppData\Local\Temp\pip-build-env-5l8ufc_l\overlay\Lib\site-packages\setuptools\build_meta.py", line 301, in _get_build_requires
+          self.run_setup()
+        File "C:\Users\emman\AppData\Local\Temp\pip-build-env-5l8ufc_l\overlay\Lib\site-packages\setuptools\build_meta.py", line 317, in run_setup
+          exec(code, locals())  # noqa: S102 # exec is intentional here
+        File "<string>", line 105, in <module>
+        File "C:\Users\emman\AppData\Local\Programs\Python\Python310\lib\subprocess.py", line 457, in check_returncode
+          raise CalledProcessError(self.returncode, self.args, self.stdout,
+      subprocess.CalledProcessError: Command '['cmake', '..']' returned non-zero exit status 1.
+      [end of output]
+
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'pyopenjtalk' when getting requirements to build wheel
