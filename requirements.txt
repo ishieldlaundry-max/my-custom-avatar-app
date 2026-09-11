@@ -28,7 +28,8 @@ uvicorn
 # The project uses torch.cuda directly but does not use pycuda.  Keeping
 # pycuda here triggers a local CUDA compilation during installation, which
 # fails on CPU-only Replit runtimes and is unnecessary for TensorRT.
-torch==2.14.0
-torchvision==0.29.0
+torch==2.11.0
+torchvision==0.26.0
+torchaudio==2.11.0
 onnxruntime==1.30.0
 Pillow

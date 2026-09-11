@@ -19,6 +19,11 @@ def load_description(fp):
     return content
 
 
+def existing_examples(*paths):
+    """Return only bundled examples that exist in the current checkout."""
+    return [[path] for path in paths if osp.isfile(path)]
+
+
 import argparse
 
 parser = argparse.ArgumentParser(description='Faster Live Portrait Pipeline')
@@ -162,10 +167,10 @@ with gr.Blocks(theme=gr.themes.Soft(font=[gr.themes.GoogleFont("Plus Jakarta San
                     with gr.Accordion(open=True, label="Driving Pickle"):
                         driving_pickle_input = gr.File(type="filepath", file_types=[".pkl"])
                         gr.Examples(
-                            examples=[
-                                [osp.join(example_video_dir, "d2.pkl")],
-                                [osp.join(example_video_dir, "d8.pkl")],
-                            ],
+                            examples=existing_examples(
+                                osp.join(example_video_dir, "d2.pkl"),
+                                osp.join(example_video_dir, "d8.pkl"),
+                            ),
                             inputs=[driving_pickle_input],
                             cache_examples=False,
                         )
