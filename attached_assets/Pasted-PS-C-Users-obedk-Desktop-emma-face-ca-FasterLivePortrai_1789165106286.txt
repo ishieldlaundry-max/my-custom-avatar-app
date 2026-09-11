@@ -1,0 +1,63 @@
+PS C:\Users\obedk\Desktop\emma face ca\FasterLivePortrait-master> .\venv\Scripts\python.exe -m pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0
+Collecting torch==2.11.0
+  Downloading torch-2.11.0-cp310-cp310-win_amd64.whl.metadata (29 kB)
+Collecting torchvision==0.26.0
+  Downloading torchvision-0.26.0-cp310-cp310-win_amd64.whl.metadata (5.5 kB)
+Collecting torchaudio==2.11.0
+  Downloading torchaudio-2.11.0-cp310-cp310-win_amd64.whl.metadata (6.9 kB)
+Collecting filelock (from torch==2.11.0)
+  Downloading filelock-3.32.6-py3-none-any.whl.metadata (2.0 kB)
+Collecting typing-extensions>=4.10.0 (from torch==2.11.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting setuptools<82 (from torch==2.11.0)
+  Downloading setuptools-81.0.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting sympy>=1.13.3 (from torch==2.11.0)
+  Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+Collecting networkx>=2.5.1 (from torch==2.11.0)
+  Downloading networkx-3.4.2-py3-none-any.whl.metadata (6.3 kB)
+Collecting jinja2 (from torch==2.11.0)
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting fsspec>=0.8.5 (from torch==2.11.0)
+  Downloading fsspec-2026.7.0-py3-none-any.whl.metadata (10 kB)
+Collecting numpy (from torchvision==0.26.0)
+  Downloading numpy-2.2.6-cp310-cp310-win_amd64.whl.metadata (60 kB)
+Collecting pillow!=8.3.*,>=5.3.0 (from torchvision==0.26.0)
+  Downloading pillow-12.3.0-cp310-cp310-win_amd64.whl.metadata (9.3 kB)
+Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch==2.11.0)
+  Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting MarkupSafe>=2.0 (from jinja2->torch==2.11.0)
+  Downloading markupsafe-3.0.3-cp310-cp310-win_amd64.whl.metadata (2.8 kB)
+Downloading torch-2.11.0-cp310-cp310-win_amd64.whl (114.5 MB)
+   ---------------------------------------- 114.5/114.5 MB 735.5 kB/s  0:02:13
+Downloading torchvision-0.26.0-cp310-cp310-win_amd64.whl (3.7 MB)
+   ---------------------------------------- 3.7/3.7 MB 920.2 kB/s  0:00:03
+Downloading torchaudio-2.11.0-cp310-cp310-win_amd64.whl (328 kB)
+Downloading setuptools-81.0.0-py3-none-any.whl (1.1 MB)
+   ---------------------------------------- 1.1/1.1 MB 656.2 kB/s  0:00:01
+Downloading fsspec-2026.7.0-py3-none-any.whl (206 kB)
+Downloading networkx-3.4.2-py3-none-any.whl (1.7 MB)
+   ---------------------------------------- 1.7/1.7 MB 925.9 kB/s  0:00:01
+Downloading pillow-12.3.0-cp310-cp310-win_amd64.whl (7.2 MB)
+   ---------------------------------------- 7.2/7.2 MB 476.2 kB/s  0:00:14
+Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+   ---------------------------------------- 6.3/6.3 MB 591.7 kB/s  0:00:10
+Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+   ---------------------------------------- 536.2/536.2 kB 975.3 kB/s  0:00:00
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading filelock-3.32.6-py3-none-any.whl (100 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading markupsafe-3.0.3-cp310-cp310-win_amd64.whl (15 kB)
+Downloading numpy-2.2.6-cp310-cp310-win_amd64.whl (12.9 MB)
+   ---------------------------------------- 12.9/12.9 MB 1.1 MB/s  0:00:11
+Installing collected packages: torchaudio, mpmath, typing-extensions, sympy, setuptools, pillow, numpy, networkx, MarkupSafe, fsspec, filelock, jinja2, torch, torchvision
+  Attempting uninstall: setuptools
+    Found existing installation: setuptools 84.0.0
+    Uninstalling setuptools-84.0.0:
+      Successfully uninstalled setuptools-84.0.0
+Successfully installed MarkupSafe-3.0.3 filelock-3.32.6 fsspec-2026.7.0 jinja2-3.1.6 mpmath-1.3.0 networkx-3.4.2 numpy-2.2.6 pillow-12.3.0 setuptools-81.0.0 sympy-1.14.0 torch-2.11.0 torchaudio-2.11.0 torchvision-0.26.0 typing-extensions-4.16.0
+PS C:\Users\obedk\Desktop\emma face ca\FasterLivePortrait-master> .\venv\Scripts\python.exe -c "import torch; print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'Not detected')"
+Torch: 2.11.0+cpu
+CUDA available: False
+CUDA: None
+GPU: Not detected
+PS C:\Users\obedk\Desktop\emma face ca\FasterLivePortrait-master>
