@@ -37,9 +37,10 @@ Ensure that your machine has Nvidia GPU drivers installed. CUDA version should b
 Refer to `tests/test_api.py`. The default is the Animal model, but now it also supports the Human model.
 The return is a compressed package, by default unzipped to `./results/api_*`. Confirm according to the actual printed log.
 * `test_with_video_animal()`, image and video driving. Set `flag_pickle=False`. It will additionally return the driving video's pkl file, which can be called directly next time.
-* `test_with_pkl_animal()`, image and pkl driving. The checked-in `d8.pkl`
-  is a small neutral one-frame fixture generated without model files. To
-  regenerate it deterministically:
+* `test_with_pkl_animal()`, image and pkl driving. Because generated driving
+  pickles are excluded from version control, the test creates a small neutral
+  one-frame `d8.pkl` fixture when it is missing. It requires no model files.
+  To regenerate it manually:
   ```shell
   python scripts/generate_pickle_fixture.py
   ```
@@ -63,4 +64,6 @@ bash scripts/start_api.sh
 pytest -q tests/test_api.py
 ```
 
-The pickle test skips when `assets/examples/driving/d8.pkl` is not present; the repository currently includes the video fixtures but not that pickle fixture. The two video tests require the API to be running on `127.0.0.1:9871` and return a ZIP archive containing the generated outputs.
+The pickle test regenerates `assets/examples/driving/d8.pkl` when it is absent.
+All three integration tests require the API to be running on
+`127.0.0.1:9871` and return a ZIP archive containing generated outputs.

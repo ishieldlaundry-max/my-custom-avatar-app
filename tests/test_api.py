@@ -9,6 +9,8 @@ from io import BytesIO
 import datetime
 import json
 import pickle
+import subprocess
+import sys
 import pytest
 
 
@@ -35,9 +37,9 @@ def test_with_pickle_animal():
         source_image_path = "./assets/examples/source/s39.jpg"
         driving_pickle_path = "./assets/examples/driving/d8.pkl"
         if not os.path.exists(driving_pickle_path):
-            pytest.skip(
-                f"missing integration fixture: {driving_pickle_path}; "
-                "regenerate it with python scripts/generate_pickle_fixture.py"
+            subprocess.run(
+                [sys.executable, "scripts/generate_pickle_fixture.py", driving_pickle_path],
+                check=True,
             )
 
         with open(driving_pickle_path, "rb") as fixture:
@@ -57,6 +59,8 @@ def test_with_pickle_animal():
         response = requests.post("http://127.0.0.1:9871/predict/", files=files, data=data)
         response.raise_for_status()
         with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
+            output_names = [name for name in zip_ref.namelist() if not name.endswith("/")]
+            assert output_names, "API returned an empty ZIP archive"
             # save files for each request in a different folder
             dt = datetime.datetime.now()
             ts = int(dt.timestamp())

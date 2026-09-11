@@ -34,6 +34,13 @@ def build_fixture() -> dict:
     }
 
 
+def write_fixture(output: Path) -> None:
+    """Write the deterministic fixture to output."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("wb") as handle:
+        pickle.dump(build_fixture(), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -45,9 +52,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("wb") as handle:
-        pickle.dump(build_fixture(), handle, protocol=pickle.HIGHEST_PROTOCOL)
+    write_fixture(args.output)
     print(f"Wrote neutral motion fixture to {args.output}")
 
 
