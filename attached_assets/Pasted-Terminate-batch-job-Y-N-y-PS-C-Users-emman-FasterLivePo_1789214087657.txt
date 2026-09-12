@@ -1,0 +1,61 @@
+Terminate batch job (Y/N)? y
+PS C:\Users\emman\FasterLivePortrait-trt> C:\Users\emman\FasterLivePortrait-local\webui.py
+PS C:\Users\emman\FasterLivePortrait-trt> Copy-Item `
+>>     "$HOME\FasterLivePortrait-local\webui.py" `
+>>     "$HOME\FasterLivePortrait-trt\webui.py" `
+>>     -Force
+>>
+>> cd "$HOME\FasterLivePortrait-trt"
+>> .\webui.bat
+
+C:\Users\emman\FasterLivePortrait-trt>.\venv\python.exe .\webui.py --mode trt
+INFO:albumentations.check_version:A new version of Albumentations is available: 2.0.8 (you have 1.4.13). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.
+load Human Model >>>
+loading model: warping_spade
+{'name': 'WarpingSpadeModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/warping_spade-fix.trt'}
+loading model: motion_extractor
+{'name': 'MotionExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/motion_extractor.trt'}
+loading model: landmark
+{'name': 'LandmarkModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/landmark.trt'}
+loading model: face_analysis
+{'name': 'FaceAnalysisModel', 'predict_type': 'trt', 'model_path': ['./checkpoints/liveportrait_onnx/retinaface_det_static.trt', './checkpoints/liveportrait_onnx/face_2dpose_106_static.trt']}
+loading model: app_feat_extractor
+{'name': 'AppearanceFeatureExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/appearance_feature_extractor.trt'}
+trt
+loading model: stitching
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching.trt'}
+loading model: stitching_eye_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_eye.trt'}
+loading model: stitching_lip_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_lip.trt'}
+Running on local URL:  http://127.0.0.1:9870
+INFO:httpx:HTTP Request: GET http://127.0.0.1:9870/startup-events "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: HEAD http://127.0.0.1:9870/ "HTTP/1.1 200 OK"
+
+To create a public link, set `share=True` in `launch()`.
+INFO:httpx:HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+INFO:httpx:HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\analytics.py:106: UserWarning: IMPORTANT: You are using gradio version 4.38.1, however version 4.44.1 is available, please upgrade.
+--------
+  warnings.warn(
+INFO:httpx:HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\queueing.py", line 536, in process_events
+    response = await route_utils.call_process_api(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\route_utils.py", line 276, in call_process_api
+    output = await app.get_blocks().process_api(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\blocks.py", line 1897, in process_api
+    result = await self.call_function(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\blocks.py", line 1483, in call_function
+    prediction = await anyio.to_thread.run_sync(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2177, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 859, in run
+    result = context.run(func, *args)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\utils.py", line 816, in wrapper
+    response = f(*args, **kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\webui.py", line 49, in gpu_wrapped_execute_video
+    return gradio_pipeline.execute_video(source_image, selected_source_video, *args, **kwargs)
+TypeError: GradioLivePortraitPipeline.execute_video() takes from 1 to 26 positional arguments but 28 were given
