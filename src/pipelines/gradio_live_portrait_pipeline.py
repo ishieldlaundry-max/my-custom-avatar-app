@@ -67,6 +67,9 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             v_tab_selection=None,
             cfg_scale=4.0,
             voice_name='af',
+            flag_color_match=True,
+            stitching_blending_radius=0.35,
+            diagnostic_mode=False,
     ):
         """ for video driven potrait animation
         """
@@ -108,7 +111,9 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
                 'dri_vy_ratio': vy_ratio_crop_driving_video,
                 'driving_smooth_observation_variance': driving_smooth_observation_variance,
                 'animation_region': animation_region,
-                'cfg_scale': cfg_scale
+                'cfg_scale': cfg_scale,
+                'flag_color_match': flag_color_match,
+                'stitching_blending_radius': stitching_blending_radius,
             }
             # update config from user input
             update_ret = self.update_cfg(args_user)

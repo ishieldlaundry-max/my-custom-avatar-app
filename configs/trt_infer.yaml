@@ -97,6 +97,8 @@ infer_params:
   flag_pasteback: True
   flag_do_crop: True
   flag_do_rot: True
+  flag_color_match: True
+  stitching_blending_radius: 0.35
 
   # NOT EXPOERTED PARAMS
   lip_normalize_threshold: 0.1 # threshold for flag_normalize_lip

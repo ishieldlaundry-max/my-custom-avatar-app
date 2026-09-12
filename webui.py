@@ -6,6 +6,7 @@ The entrance of the gradio
 import os
 import pdb
 import inspect
+import importlib.util
 
 import gradio as gr
 import os.path as osp
@@ -28,7 +29,7 @@ def existing_examples(*paths):
 import argparse
 
 parser = argparse.ArgumentParser(description='Faster Live Portrait Pipeline')
-parser.add_argument('--mode', required=False, type=str, default="onnx")
+parser.add_argument('--mode', required=False, choices=("onnx", "trt", "auto"), default="auto")
 parser.add_argument('--use_mp', action='store_true', help='use mediapipe or not')
 parser.add_argument(
     "--host_ip", type=str, default="127.0.0.1", help="host ip"
@@ -36,7 +37,23 @@ parser.add_argument(
 parser.add_argument("--port", type=int, default=9870, help="server port")
 args, unknown = parser.parse_known_args()
 
-if args.mode == "onnx":
+def resolve_runtime_mode(requested_mode):
+    """Select TRT only when both CUDA and the TensorRT package are available."""
+    if requested_mode == "onnx":
+        return "onnx"
+    try:
+        import torch
+        trt_available = importlib.util.find_spec("tensorrt") is not None
+        cuda_available = torch.cuda.is_available()
+    except (ImportError, RuntimeError):
+        trt_available = cuda_available = False
+    if requested_mode == "trt" and not (cuda_available and trt_available):
+        print("TensorRT was requested but is unavailable; falling back to ONNX.")
+    return "trt" if cuda_available and trt_available else "onnx"
+
+
+runtime_mode = resolve_runtime_mode(args.mode)
+if runtime_mode == "onnx":
     cfg_path = "configs/onnx_mp_infer.yaml" if args.use_mp else "configs/onnx_infer.yaml"
 else:
     cfg_path = "configs/trt_mp_infer.yaml" if args.use_mp else "configs/trt_infer.yaml"
@@ -72,6 +89,9 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
     "v_tab_selection",
     "cfg_scale",
     "voice_name",
+    "flag_color_match",
+    "stitching_blending_radius",
+    "diagnostic_mode",
 )
 
 
@@ -103,6 +123,7 @@ def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam
     elif values[driving_tab_index] == "Image" and not values[3] and values[2]:
         values[driving_tab_index] = "Video"
 
+    diagnostic_mode = bool(values[VIDEO_PIPELINE_ARGUMENT_NAMES.index("diagnostic_mode")])
     execute_video = gradio_pipeline.execute_video
     supported_parameters = inspect.signature(execute_video).parameters
     call_kwargs = {
@@ -120,8 +141,8 @@ def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam
         result = list(result)
         # The pipeline's secondary outputs are diagnostic comparisons that
         # include the driving person. Keep them hidden in the production UI.
-        result[2] = gr.update(visible=False)
-        result[6] = gr.update(visible=False)
+        result[2] = gr.update(visible=diagnostic_mode)
+        result[6] = gr.update(visible=diagnostic_mode)
         return tuple(result)
     return result
 
@@ -833,6 +854,19 @@ with gr.Blocks(
 
             with gr.Accordion("Motion and render controls", open=False, elem_id="animation-controls"):
                 with gr.Row():
+                    runtime_mode_control = gr.Radio(
+                        ["onnx", "trt"],
+                        value=runtime_mode,
+                        label="Runtime mode",
+                        info="Selected at launch. Restart with --mode onnx or --mode trt to change it.",
+                        interactive=False,
+                    )
+                    diagnostic_mode = gr.Checkbox(
+                        value=False,
+                        label="Diagnostic mode",
+                        info="Show the driving-person comparison output.",
+                    )
+                with gr.Row():
                     flag_relative_input = gr.Checkbox(
                         value=True,
                         label="Identity-preserving relative motion",
@@ -843,6 +877,19 @@ with gr.Blocks(
                         label="Preserve portrait body/background",
                     )
                     flag_is_animal = gr.Checkbox(value=False, label="Animal model")
+                with gr.Row():
+                    flag_color_match = gr.Checkbox(
+                        value=True,
+                        label="Enable color match",
+                        info="Match synthesized face color to the target portrait before paste-back.",
+                    )
+                    stitching_blending_radius = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.35,
+                        step=0.01,
+                        label="Stitching margin / mask blending radius",
+                    )
                 with gr.Row():
                     driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
                     cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
@@ -986,6 +1033,9 @@ with gr.Blocks(
             v_tab_selection,
             cfg_scale,
             voice_name,
+            flag_color_match,
+            stitching_blending_radius,
+            diagnostic_mode,
         ],
         outputs=[
             output_video_i2v,

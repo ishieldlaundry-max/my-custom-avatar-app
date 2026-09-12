@@ -1,0 +1,24 @@
+I am customizing a local FasterLivePortrait application. I edit and structure the code here in Replit (using CPU/ONNX mode for syntax verification and UI design), and then deploy/run the production code locally on my NVIDIA RTX 4070 Alienware laptop via TensorRT.
+
+Please refactor and optimize my FasterLivePortrait codebase according to the following technical requirements:
+
+1. FIX SKIN TONE AND COLOR DISCREPANCIES (COLOR MATCHING & STITCHING PIPELINE):
+- Implement a robust post-processing Color Alignment / Histogram Matching module in Python (e.g., using OpenCV/numpy) that runs after face synthesis.
+- Ensure the synthesized facial region's color space (LAB or HSV space) is matched to the original Target Portrait before crop stitching/paste-back occurs.
+- Add adjustable Gradio parameters for:
+  * "Enable Color Match" (Boolean, default: True)
+  * "Stitching Margin / Mask Blending Radius" (Slider, range 0.0 to 1.0, default optimal for tight face boundaries)
+  * "Expression-Only Mode" (Ensure body, clothing, hair, background, and head structure remain 100% frozen to the original target image).
+
+2. GRADIO CYBERPUNK CONTROL PANEL UI ENHANCEMENTS:
+- Update the Gradio interface layout to match a clean, modern dark/cyberpunk aesthetic.
+- Restructure the output panel: Ensure the default production preview displays ONLY the clean composited final avatar, hiding the side-by-side diagnostic driving view unless a "Diagnostic Mode" toggle is manually enabled.
+- Ensure all key controls are easily accessible: Target Portrait/Video tab, Webcam Motion Capture tab, Driving Video/Image/Audio/Text tabs, Motion Intensity/Smoothing sliders, Eye & Lip Retargeting, and Mode Toggle (TRT vs ONNX).
+
+3. DUAL-ENVIRONMENT COMPATIBILITY (REPLIT ONNX vs. ALIENWARE TENSORRT):
+- Ensure clean environment detection:
+  * In Replit (CPU / missing CUDA/TensorRT runtime): The application must gracefully default to `--mode onnx` without crashing on launch, allowing Replit to serve the web interface preview for UI testing.
+  * On Local Hardware (Alienware RTX 4070): Ensure `--mode trt` path logic cleanly loads local `.trt` engines, CUDA-enabled PyTorch, and FFmpeg output pipelines.
+- Ensure all audio/pitch-shifting Web Audio API frontend code is self-contained so browser-based microphone pitch modifications work independently of the neural network inference worker.
+
+Please review the repository structure, implement these color preservation and UI fixes cleanly, and ensure all code is properly modularized and commented.

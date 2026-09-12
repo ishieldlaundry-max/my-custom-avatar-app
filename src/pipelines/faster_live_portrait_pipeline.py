@@ -16,10 +16,12 @@ import numpy as np
 import torch
 
 from .. import models
-from ..utils.crop import crop_image, parse_bbox_from_landmark, crop_image_by_bbox, paste_back, paste_back_pytorch
-from ..utils.utils import resize_to_limit, prepare_paste_back, get_rotation_matrix, calc_lip_close_ratio, \
+from ..utils.crop import crop_image, parse_bbox_from_landmark, crop_image_by_bbox, paste_back, paste_back_pytorch, \
+    prepare_paste_back
+from ..utils.utils import resize_to_limit, get_rotation_matrix, calc_lip_close_ratio, \
     calc_eye_close_ratio, transform_keypoint, concat_feat
 from src.utils import utils
+from ..utils.color_alignment import align_lab_color_tensor
 
 
 class FasterLivePortraitPipeline:
@@ -228,7 +230,14 @@ class FasterLivePortraitPipeline:
                     R_s = get_rotation_matrix(pitch, yaw, roll)
                     f_s = self.model_dict["app_feat_extractor"].predict(img_crop_256x256)
                     x_s = transform_keypoint(pitch, yaw, roll, t, exp, scale, kp)
-                    src_infos[i].extend([source_lmk.copy(), R_s.copy(), f_s.copy(), x_s.copy(), x_c_s.copy()])
+                    src_infos[i].extend([
+                        source_lmk.copy(),
+                        R_s.copy(),
+                        f_s.copy(),
+                        x_s.copy(),
+                        x_c_s.copy(),
+                        img_crop_256x256.copy(),
+                    ])
                     if not self.is_animal:
                         flag_lip_zero = self.cfg.infer_params.flag_normalize_lip  # not overwrite
                         if flag_lip_zero:
@@ -256,8 +265,12 @@ class FasterLivePortraitPipeline:
 
                     ######## prepare for pasteback ########
                     if self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and self.cfg.infer_params.flag_stitching:
-                        mask_ori_float = prepare_paste_back(self.mask_crop, crop_info['M_c2o'],
-                                                            dsize=(img_rgb.shape[1], img_rgb.shape[0]))
+                        mask_ori_float = prepare_paste_back(
+                            self.mask_crop,
+                            crop_info['M_c2o'],
+                            dsize=(img_rgb.shape[1], img_rgb.shape[0]),
+                            blending_radius=self.cfg.infer_params.get("stitching_blending_radius", 0.35),
+                        )
                         mask_ori_float = torch.from_numpy(mask_ori_float).to(self.device)
                         src_infos[i].append(mask_ori_float)
                     else:
@@ -316,7 +329,7 @@ class FasterLivePortraitPipeline:
         eye_delta_before_animation = None
         for j in range(len(src_info)):
             if self.is_source_video:
-                x_s_info, source_lmk, R_s, f_s, x_s, x_c_s, lip_delta_before_animation, flag_lip_zero, mask_ori_float, M = \
+                x_s_info, source_lmk, R_s, f_s, x_s, x_c_s, reference_crop, lip_delta_before_animation, flag_lip_zero, mask_ori_float, M = \
                     src_info[j]
                 # let lip-open scalar to be 0 at first if the input is a video and flag_relative_motion
                 if not (self.cfg.infer_params.flag_normalize_lip and self.cfg.infer_params.flag_relative_motion):
@@ -335,11 +348,15 @@ class FasterLivePortraitPipeline:
 
                 if not realtime and self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and \
                         self.cfg.infer_params.flag_stitching:
-                    mask_ori_float = prepare_paste_back(self.mask_crop, M.cpu().numpy(),
-                                                        dsize=(self.src_imgs[0].shape[1], self.src_imgs[0].shape[0]))
+                    mask_ori_float = prepare_paste_back(
+                        self.mask_crop,
+                        M.cpu().numpy(),
+                        dsize=(self.src_imgs[0].shape[1], self.src_imgs[0].shape[0]),
+                        blending_radius=self.cfg.infer_params.get("stitching_blending_radius", 0.35),
+                    )
                     mask_ori_float = torch.from_numpy(mask_ori_float).to(self.device)
             else:
-                x_s_info, source_lmk, R_s, f_s, x_s, x_c_s, lip_delta_before_animation, flag_lip_zero, mask_ori_float, M = \
+                x_s_info, source_lmk, R_s, f_s, x_s, x_c_s, reference_crop, lip_delta_before_animation, flag_lip_zero, mask_ori_float, M = \
                     src_info[j]
             if self.cfg.infer_params.flag_relative_motion:
                 if self.cfg.infer_params.animation_region in ["all", "pose"]:
@@ -477,6 +494,18 @@ class FasterLivePortraitPipeline:
 
             x_d_i_new = x_s + (x_d_i_new - x_s) * self.cfg.infer_params.driving_multiplier
             out_crop = self.model_dict["warping_spade"].predict(f_s, x_s, x_d_i_new)
+            if self.cfg.infer_params.get("flag_color_match", True):
+                color_reference = cv2.resize(
+                    reference_crop,
+                    (out_crop.shape[1], out_crop.shape[0]),
+                    interpolation=cv2.INTER_AREA,
+                )
+                crop_mask = cv2.resize(
+                    self.mask_crop,
+                    (out_crop.shape[1], out_crop.shape[0]),
+                    interpolation=cv2.INTER_LINEAR,
+                )
+                out_crop = align_lab_color_tensor(out_crop, color_reference, crop_mask)
             if not realtime and self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and self.cfg.infer_params.flag_stitching:
                 # TODO: pasteback is slow, considering optimize it using multi-threading or GPU
                 # I_p_pstbk = paste_back(out_crop, crop_info['M_c2o'], I_p_pstbk, mask_ori_float)
