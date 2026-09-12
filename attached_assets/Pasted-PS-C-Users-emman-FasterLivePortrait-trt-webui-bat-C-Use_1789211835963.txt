@@ -1,0 +1,39 @@
+PS C:\Users\emman\FasterLivePortrait-trt> .\webui.bat
+
+C:\Users\emman\FasterLivePortrait-trt>.\venv\python.exe .\webui.py --mode trt
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\torchgeometry\core\pinhole.py:73: SyntaxWarning: "is not" with a literal. Did you mean "!="?
+  if len(data.shape) not in (3, 4,) and data.shape[-2:] is not (4, 4):
+INFO:albumentations.check_version:A new version of Albumentations is available: 2.0.8 (you have 1.4.13). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.
+load Human Model >>>
+loading model: warping_spade
+{'name': 'WarpingSpadeModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/warping_spade-fix.trt'}
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\webui.py", line 37, in <module>
+    gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\gradio_live_portrait_pipeline.py", line 36, in __init__
+    super(GradioLivePortraitPipeline, self).__init__(cfg, **kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\faster_live_portrait_pipeline.py", line 28, in __init__
+    self.init(**kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\faster_live_portrait_pipeline.py", line 32, in init
+    self.init_models(**kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\faster_live_portrait_pipeline.py", line 72, in init_models
+    self.model_dict[model_name] = getattr(models, self.cfg.models[model_name]["name"])(
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\warping_spade_model.py", line 20, in __init__
+    super(WarpingSpadeModel, self).__init__(**kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\base_model.py", line 13, in __init__
+    self.predictor = get_predictor(**self.kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\predictor.py", line 257, in get_predictor
+    return TensorRTPredictor(**kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\predictor.py", line 58, in __init__
+    with open(engine_path, "rb") as f, trt.Runtime(self.logger) as runtime:
+FileNotFoundError: [Errno 2] No such file or directory: './checkpoints/liveportrait_onnx/warping_spade-fix.trt'
+Exception ignored in: <function TensorRTPredictor.__del__ at 0x0000019E2F7C3A30>
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\predictor.py", line 166, in __del__
+    del self.engine
+AttributeError: engine
+Exception ignored in: <function BaseModel.__del__ at 0x0000019E318FC0D0>
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\src\models\base_model.py", line 48, in __del__
+    if self.predictor is not None:
+AttributeError: 'WarpingSpadeModel' object has no attribute 'predictor'
