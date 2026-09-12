@@ -78,12 +78,30 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
 def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam_video, *args, **kwargs):
     """Select webcam input and adapt to the pipeline version in the runtime bundle."""
     selected_source_video = webcam_video if webcam_enabled else source_video
-    values = (source_image, selected_source_video, *args)
+    values = list((source_image, selected_source_video, *args))
     if len(values) != len(VIDEO_PIPELINE_ARGUMENT_NAMES):
         raise TypeError(
             "The animation controls no longer match the video pipeline adapter: "
             f"expected {len(VIDEO_PIPELINE_ARGUMENT_NAMES)} values, received {len(values)}."
         )
+
+    # The webcam control is a source-video selector, so do not leave the
+    # hidden source tab on "Image" when the camera has supplied a clip.
+    source_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("tab_selection")
+    driving_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("v_tab_selection")
+    if webcam_enabled and webcam_video:
+        values[1] = webcam_video
+        values[source_tab_index] = "Video"
+    elif values[source_tab_index] == "Image" and not values[0] and values[1]:
+        values[source_tab_index] = "Video"
+    elif values[source_tab_index] == "Video" and not values[1] and values[0]:
+        values[source_tab_index] = "Image"
+
+    # Prefer an available driving input if a hidden tab value is stale.
+    if values[driving_tab_index] == "Video" and not values[2] and values[3]:
+        values[driving_tab_index] = "Image"
+    elif values[driving_tab_index] == "Image" and not values[3] and values[2]:
+        values[driving_tab_index] = "Video"
 
     execute_video = gradio_pipeline.execute_video
     supported_parameters = inspect.signature(execute_video).parameters
