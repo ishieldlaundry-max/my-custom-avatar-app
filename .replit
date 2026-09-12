@@ -2,7 +2,7 @@ modules = ["python-3.12", "bash"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["abseil-cpp", "antlr", "espeak-ng", "ffmpeg-full", "freetype", "gtest", "jre", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libjpeg_turbo", "libpng", "libsndfile", "libtiff", "libwebp", "libxcrypt", "oneDNN", "openjpeg", "pkg-config", "re2", "tcl", "tk", "unzip", "which", "zlib"]
+packages = ["abseil-cpp", "antlr", "espeak-ng", "ffmpeg-full", "freetype", "gitFull", "gtest", "jre", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libjpeg_turbo", "libpng", "libsndfile", "libtiff", "libwebp", "libxcrypt", "oneDNN", "openjpeg", "pkg-config", "playwright-driver", "re2", "tcl", "tk", "unzip", "which", "zlib"]
 
 [agent]
 expertMode = true
