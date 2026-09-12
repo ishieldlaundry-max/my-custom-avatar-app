@@ -1,0 +1,53 @@
+  libavutil      61.  1.101 / 61.  1.101
+  libavcodec     63.  1.101 / 63.  1.101
+  libavformat    63.  1.101 / 63.  1.101
+  libavdevice    63.  1.101 / 63.  1.101
+  libavfilter    12.  1.101 / 12.  1.101
+  libswscale     10.  1.101 / 10.  1.101
+  libswresample   7.  1.101 /  7.  1.101
+Input #0, matroska,webm, from 'C:\Users\emman\AppData\Local\Temp\gradio\727fccd463e101fdc4dcd1724fce9df86b31d13f\sample.webm':
+  Metadata:
+    encoder         : Chrome
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0(eng): Video: av1 (libdav1d) (Main), yuv420p(pc, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 20 fps, 20 tbr, 1k tbn (default)
+    Metadata:
+      alpha_mode      : 1
+Stream mapping:
+  Stream #0:0 -> #0:0 (av1 (libdav1d) -> vp9 (libvpx-vp9))
+Press [q] to stop, [?] for help
+[libvpx-vp9 @ 0000015352d42cc0] v1.16.0-184-g0cfc6da39
+[libvpx-vp9 @ 0000015352d42cc0] Neither bitrate nor constrained quality specified, using default CRF of 32
+Output #0, webm, to 'C:\Users\emman\AppData\Local\Temp\gradio\727fccd463e101fdc4dcd1724fce9df86b31d13f\sample_flip.webm':
+  Metadata:
+    encoder         : Lavf63.1.101
+  Stream #0:0(eng): Video: vp9, yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 20 fps, 1k tbn (default)
+    Metadata:
+      encoder         : Lavc63.1.101 libvpx-vp9
+      alpha_mode      : 1
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+[in#0/matroska,webm @ 0000015350ca9800] File ended prematurely at pos. 9756432 (0x94df10)0.678x elapsed=0:00:58.78
+[out#0/webm @ 0000015350d445c0] video:3578KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.184339%
+frame=  849 fps= 14 q=21.0 Lsize=    3584KiB time=00:00:42.40 bitrate= 692.5kbits/s speed=0.679x elapsed=0:01:02.47
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\queueing.py", line 536, in process_events
+    response = await route_utils.call_process_api(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\route_utils.py", line 276, in call_process_api
+    output = await app.get_blocks().process_api(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\blocks.py", line 1897, in process_api
+    result = await self.call_function(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\blocks.py", line 1483, in call_function
+    prediction = await anyio.to_thread.run_sync(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2177, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 859, in run
+    result = context.run(func, *args)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\utils.py", line 816, in wrapper
+    response = f(*args, **kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\webui.py", line 102, in gpu_wrapped_execute_video
+    return execute_video(**call_kwargs)
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\gradio_live_portrait_pipeline.py", line 143, in execute_video
+    raise gr.Error("The input source portrait or driving video hasn't been prepared yet 💥!", duration=5)
+gradio.exceptions.Error: "The input source portrait or driving video hasn't been prepared yet 💥!"
