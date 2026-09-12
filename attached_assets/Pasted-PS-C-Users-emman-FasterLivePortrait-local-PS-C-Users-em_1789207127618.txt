@@ -1,0 +1,60 @@
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> if (Test-Path -LiteralPath $destination) {
+>>     Write-Host "The destination already exists:" -ForegroundColor Red
+>>     Write-Host $destination
+>>     Write-Host "Nothing was changed. Rename or remove that folder only after checking its contents."
+>>     exit 1
+>> }
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "Archive found:" -ForegroundColor Cyan
+Archive found:
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host $archive.FullName
+C:\Users\emman\Downloads\FasterLivePortrait-windows-20241228.zip
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nExtracting to:" -ForegroundColor Cyan
+
+Extracting to:
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host $destination
+C:\Users\emman\FasterLivePortrait-trt
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> New-Item -ItemType Directory -Path $destination | Out-Null
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Expand-Archive `
+>>     -LiteralPath $archive.FullName `
+>>     -DestinationPath $destination
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> # If the ZIP created one extra top-level folder, move its contents up one level
+PS C:\Users\emman\FasterLivePortrait-local> $topLevelItems = @(Get-ChildItem -LiteralPath $destination -Force)
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> if ($topLevelItems.Count -eq 1 -and $topLevelItems[0].PSIsContainer) {
+>>     $nestedFolder = $topLevelItems[0]
+>>
+>>     Get-ChildItem -LiteralPath $nestedFolder.FullName -Force |
+>>         Move-Item -Destination $destination -Force
+>>
+>>     Remove-Item -LiteralPath $nestedFolder.FullName -Force
+>> }
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nExtraction complete." -ForegroundColor Green
+
+Extraction complete.
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "Package location: $destination"
+Package location: C:\Users\emman\FasterLivePortrait-trt
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nChecking for TensorRT model files..." -ForegroundColor Cyan
+
+Checking for TensorRT model files...
+PS C:\Users\emman\FasterLivePortrait-local> $trtFiles = Get-ChildItem `
+>>     -LiteralPath (Join-Path $destination "checkpoints\liveportrait_onnx") `
+>>     -Filter "*.trt" `
+>>     -File `
+>>     -ErrorAction SilentlyContinue
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> if ($trtFiles) {
+>>     Write-Host "TensorRT files found:" -ForegroundColor Green
+>>     $trtFiles | Select-Object Name, Length
+>> } else {
+>>     Write-Host "No .trt files were found in the expected checkpoint folder." -ForegroundColor Yellow
+>>     Write-Host "The extraction itself completed, but the package may use a different folder layout."
+>> }
+No .trt files were found in the expected checkpoint folder.
+The extraction itself completed, but the package may use a different folder layout.
