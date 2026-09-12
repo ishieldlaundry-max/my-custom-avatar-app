@@ -1,0 +1,33 @@
+PS C:\Users\emman\FasterLivePortrait-trt> cd "$HOME\FasterLivePortrait-trt"
+PS C:\Users\emman\FasterLivePortrait-trt> .\webui.bat
+
+C:\Users\emman\FasterLivePortrait-trt>.\venv\python.exe .\webui.py --mode trt
+INFO:albumentations.check_version:A new version of Albumentations is available: 2.0.8 (you have 1.4.13). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.
+load Human Model >>>
+loading model: warping_spade
+{'name': 'WarpingSpadeModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/warping_spade-fix.trt'}
+loading model: motion_extractor
+{'name': 'MotionExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/motion_extractor.trt'}
+loading model: landmark
+{'name': 'LandmarkModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/landmark.trt'}
+loading model: face_analysis
+{'name': 'FaceAnalysisModel', 'predict_type': 'trt', 'model_path': ['./checkpoints/liveportrait_onnx/retinaface_det_static.trt', './checkpoints/liveportrait_onnx/face_2dpose_106_static.trt']}
+loading model: app_feat_extractor
+{'name': 'AppearanceFeatureExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/appearance_feature_extractor.trt'}
+trt
+loading model: stitching
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching.trt'}
+loading model: stitching_eye_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_eye.trt'}
+loading model: stitching_lip_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_lip.trt'}
+INFO:httpx:HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+Running on local URL:  http://127.0.0.1:9870
+INFO:httpx:HTTP Request: GET http://127.0.0.1:9870/startup-events "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: HEAD http://127.0.0.1:9870/ "HTTP/1.1 200 OK"
+
+To create a public link, set `share=True` in `launch()`.
+INFO:httpx:HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\analytics.py:106: UserWarning: IMPORTANT: You are using gradio version 4.38.1, however version 4.44.1 is available, please upgrade.
+--------
+  warnings.warn(
