@@ -1,0 +1,84 @@
+PS C:\Users\emman\FasterLivePortrait-local> $root = Join-Path $HOME "FasterLivePortrait-trt"
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nROOT CONTENTS" -ForegroundColor Cyan
+
+ROOT CONTENTS
+PS C:\Users\emman\FasterLivePortrait-local> Get-ChildItem -LiteralPath $root -Force |
+>>     Select-Object Mode, Name, Length
+
+Mode   Name                   Length
+----   ----                   ------
+d----- .git
+d----- assets
+d----- checkpoints
+d----- configs
+d----- results
+d----- scripts
+d----- src
+d----- tests
+d----- third_party
+d----- venv
+-a---- .gitignore             132
+-a---- api.py                 21339
+-a---- camera.bat             809
+-a---- DockerfileAPI          239
+-a---- README.md              11846
+-a---- README_ZH.md           10632
+-a---- requirements.txt       154
+-a---- requirements_macos.txt 159
+-a---- requirements_win.txt   146
+-a---- run.py                 11248
+-a---- update.bat             116
+-a---- webui.bat              39
+-a---- webui.py               16181
+
+
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nLAUNCHER FILES" -ForegroundColor Cyan
+
+LAUNCHER FILES
+PS C:\Users\emman\FasterLivePortrait-local> Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction SilentlyContinue |
+>>     Where-Object {
+>>         $_.FullName -notmatch "\\venv\\" -and
+>>         $_.Name -match "^(webui|camera|run|start).*\.(bat|cmd|py|ps1)$"
+>>     } |
+>>     Select-Object FullName
+
+FullName
+--------
+C:\Users\emman\FasterLivePortrait-trt\camera.bat
+C:\Users\emman\FasterLivePortrait-trt\run.py
+C:\Users\emman\FasterLivePortrait-trt\webui.bat
+C:\Users\emman\FasterLivePortrait-trt\webui.py
+
+
+PS C:\Users\emman\FasterLivePortrait-local>
+PS C:\Users\emman\FasterLivePortrait-local> Write-Host "`nMODEL FILES" -ForegroundColor Cyan
+
+MODEL FILES
+PS C:\Users\emman\FasterLivePortrait-local> Get-ChildItem -LiteralPath (Join-Path $root "checkpoints") `
+>>     -Recurse -File -Force -ErrorAction SilentlyContinue |
+>>     Where-Object {
+>>         $_.Extension -in ".trt", ".engine", ".plan", ".onnx"
+>>     } |
+>>     Select-Object FullName, Length
+
+FullName                                                                                                        Length
+--------                                                                                                        ------
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\appearance_feature_extractor.onnx   3355896
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\motion_extractor.onnx             112648514
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\stitching.onnx                       182363
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\stitching_eye.onnx                   580926
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\stitching_lip.onnx                   150609
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\warping_spade-fix.onnx            421233100
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_animal_onnx\warping_spade.onnx                421233096
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\appearance_feature_extractor.onnx          3355896
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\face_2dpose_106_static.onnx                5030884
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\landmark.onnx                            114666491
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\motion_extractor.onnx                    112648514
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\retinaface_det_static.onnx                16923827
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\stitching.onnx                              182363
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\stitching_eye.onnx                          580926
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\stitching_lip.onnx                          150609
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\warping_spade-fix.onnx                   421233100
+C:\Users\emman\FasterLivePortrait-trt\checkpoints\liveportrait_onnx\warping_spade.onnx 
