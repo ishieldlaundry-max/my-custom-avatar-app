@@ -1,0 +1,43 @@
+PS C:\Users\emman\FasterLivePortrait-trt> $download = Get-ChildItem "$HOME\Downloads" `
+>>     -File `
+>>     -Filter "webui*.py" |
+>>     Sort-Object LastWriteTime -Descending |
+>>     Select-Object -First 1
+PS C:\Users\emman\FasterLivePortrait-trt>
+PS C:\Users\emman\FasterLivePortrait-trt> if (-not $download) {
+>>     throw "No downloaded webui.py file was found."
+>> }
+No downloaded webui.py file was found.
+At line:2 char:5
++     throw "No downloaded webui.py file was found."
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (No downloaded webui.py file was found.:String) [], RuntimeException
+    + FullyQualifiedErrorId : No downloaded webui.py file was found.
+
+PS C:\Users\emman\FasterLivePortrait-trt>
+PS C:\Users\emman\FasterLivePortrait-trt> Copy-Item $download.FullName `
+>>     "$HOME\FasterLivePortrait-local\webui.py" `
+>>     -Force
+Copy-Item : Cannot bind argument to parameter 'Path' because it is null.
+At line:1 char:11
++ Copy-Item $download.FullName `
++           ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Copy-Item], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.CopyItemCom
+   mand
+
+PS C:\Users\emman\FasterLivePortrait-trt>
+PS C:\Users\emman\FasterLivePortrait-trt> Copy-Item $download.FullName `
+>>     "$HOME\FasterLivePortrait-trt\webui.py" `
+>>     -Force
+Copy-Item : Cannot bind argument to parameter 'Path' because it is null.
+At line:1 char:11
++ Copy-Item $download.FullName `
++           ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Copy-Item], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.CopyItemCom
+   mand
+
+PS C:\Users\emman\FasterLivePortrait-trt>
+PS C:\Users\emman\FasterLivePortrait-trt> cd "$HOME\FasterLivePortrait-trt"
+PS C:\Users\emman\FasterLivePortrait-trt> .\webui.bat
