@@ -5,6 +5,7 @@ The entrance of the gradio
 """
 import os
 import pdb
+import inspect
 
 import gradio as gr
 import os.path as osp
@@ -43,10 +44,60 @@ infer_cfg = OmegaConf.load(cfg_path)
 gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
 
 
+VIDEO_PIPELINE_ARGUMENT_NAMES = (
+    "input_source_image_path",
+    "input_source_video_path",
+    "input_driving_video_path",
+    "input_driving_image_path",
+    "input_driving_pickle_path",
+    "input_driving_audio_path",
+    "input_driving_text",
+    "flag_relative_input",
+    "flag_do_crop_input",
+    "flag_remap_input",
+    "driving_multiplier",
+    "flag_stitching",
+    "flag_crop_driving_video_input",
+    "flag_video_editing_head_rotation",
+    "flag_is_animal",
+    "animation_region",
+    "scale",
+    "vx_ratio",
+    "vy_ratio",
+    "scale_crop_driving_video",
+    "vx_ratio_crop_driving_video",
+    "vy_ratio_crop_driving_video",
+    "driving_smooth_observation_variance",
+    "tab_selection",
+    "v_tab_selection",
+    "cfg_scale",
+    "voice_name",
+)
+
+
 def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam_video, *args, **kwargs):
-    """Keep the pipeline API unchanged while allowing the UI to select a webcam clip."""
+    """Select webcam input and adapt to the pipeline version in the runtime bundle."""
     selected_source_video = webcam_video if webcam_enabled else source_video
-    return gradio_pipeline.execute_video(source_image, selected_source_video, *args, **kwargs)
+    values = (source_image, selected_source_video, *args)
+    if len(values) != len(VIDEO_PIPELINE_ARGUMENT_NAMES):
+        raise TypeError(
+            "The animation controls no longer match the video pipeline adapter: "
+            f"expected {len(VIDEO_PIPELINE_ARGUMENT_NAMES)} values, received {len(values)}."
+        )
+
+    execute_video = gradio_pipeline.execute_video
+    supported_parameters = inspect.signature(execute_video).parameters
+    call_kwargs = {
+        name: value
+        for name, value in zip(VIDEO_PIPELINE_ARGUMENT_NAMES, values)
+        if name in supported_parameters
+    }
+    call_kwargs.update({
+        name: value
+        for name, value in kwargs.items()
+        if name in supported_parameters
+    })
+    return execute_video(**call_kwargs)
 
 
 def gpu_wrapped_execute_image(*args, **kwargs):
