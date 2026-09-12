@@ -76,23 +76,23 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
 
 
 def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam_video, *args, **kwargs):
-    """Select webcam input and adapt to the pipeline version in the runtime bundle."""
-    selected_source_video = webcam_video if webcam_enabled else source_video
-    values = list((source_image, selected_source_video, *args))
+    """Use webcam motion to drive the selected portrait across pipeline versions."""
+    values = list((source_image, source_video, *args))
     if len(values) != len(VIDEO_PIPELINE_ARGUMENT_NAMES):
         raise TypeError(
             "The animation controls no longer match the video pipeline adapter: "
             f"expected {len(VIDEO_PIPELINE_ARGUMENT_NAMES)} values, received {len(values)}."
         )
 
-    # The webcam control is a source-video selector, so do not leave the
-    # hidden source tab on "Image" when the camera has supplied a clip.
+    # The portrait remains the source identity. Webcam capture replaces only
+    # the driving video, so the driver's appearance is never used as source.
     source_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("tab_selection")
     driving_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("v_tab_selection")
     if webcam_enabled and webcam_video:
-        values[1] = webcam_video
-        values[source_tab_index] = "Video"
-    elif values[source_tab_index] == "Image" and not values[0] and values[1]:
+        values[2] = webcam_video
+        values[driving_tab_index] = "Video"
+
+    if values[source_tab_index] == "Image" and not values[0] and values[1]:
         values[source_tab_index] = "Video"
     elif values[source_tab_index] == "Video" and not values[1] and values[0]:
         values[source_tab_index] = "Image"
@@ -115,7 +115,15 @@ def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam
         for name, value in kwargs.items()
         if name in supported_parameters
     })
-    return execute_video(**call_kwargs)
+    result = execute_video(**call_kwargs)
+    if isinstance(result, (list, tuple)) and len(result) >= 8:
+        result = list(result)
+        # The pipeline's secondary outputs are diagnostic comparisons that
+        # include the driving person. Keep them hidden in the production UI.
+        result[2] = gr.update(visible=False)
+        result[6] = gr.update(visible=False)
+        return tuple(result)
+    return result
 
 
 def gpu_wrapped_execute_image(*args, **kwargs):
@@ -657,7 +665,7 @@ with gr.Blocks(
             webcam_toggle = gr.Checkbox(
                 value=False,
                 label="Enable webcam capture",
-                info="Use the local camera as the source video.",
+                info="Use the local camera as motion only; the target portrait keeps its identity.",
             )
             webcam_input = gr.Video(
                 sources=["webcam"],
@@ -825,14 +833,25 @@ with gr.Blocks(
 
             with gr.Accordion("Motion and render controls", open=False, elem_id="animation-controls"):
                 with gr.Row():
-                    flag_relative_input = gr.Checkbox(value=False, label="Relative motion")
+                    flag_relative_input = gr.Checkbox(
+                        value=True,
+                        label="Identity-preserving relative motion",
+                    )
                     flag_stitching = gr.Checkbox(value=True, label="Stitching")
-                    flag_remap_input = gr.Checkbox(value=True, label="Paste-back")
+                    flag_remap_input = gr.Checkbox(
+                        value=True,
+                        label="Preserve portrait body/background",
+                    )
                     flag_is_animal = gr.Checkbox(value=False, label="Animal model")
                 with gr.Row():
                     driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
                     cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
-                    animation_region = gr.Radio(["exp", "pose", "lip", "eyes", "all"], value="all", label="Animation region")
+                    animation_region = gr.Radio(
+                        ["exp", "pose", "lip", "eyes", "all"],
+                        value="exp",
+                        label="Animated region",
+                        info="Expression-only keeps the portrait's hair, body, and framing unchanged.",
+                    )
                 with gr.Row():
                     flag_crop_driving_video_input = gr.Checkbox(value=False, label="Crop driving video")
                     scale_crop_driving_video = gr.Number(value=2.2, label="Driving scale", minimum=1.8, maximum=3.2, step=0.05)
@@ -871,24 +890,25 @@ with gr.Blocks(
             gr.HTML('<div class="cyber-kicker" style="margin-top:18px;">04 / Final signal</div>')
             output_video_i2v = gr.Video(
                 autoplay=False,
-                label="Animated video / original image space",
+                label="Final avatar / portrait appearance preserved",
                 elem_id="output-video",
             )
             output_video_concat_i2v = gr.Video(
                 autoplay=False,
-                label="Animated video / composited result",
+                label="Diagnostic driving comparison",
                 elem_id="output-video-secondary",
+                visible=False,
             )
             output_image_i2i = gr.Image(
                 format="png",
                 type="numpy",
-                label="Animated image / original image space",
+                label="Final avatar / portrait appearance preserved",
                 visible=False,
             )
             output_image_concat_i2i = gr.Image(
                 format="png",
                 type="numpy",
-                label="Animated image / composited result",
+                label="Diagnostic driving comparison",
                 visible=False,
             )
 
@@ -922,12 +942,9 @@ with gr.Blocks(
             )
 
     webcam_toggle.change(
-        lambda enabled: (
-            gr.update(visible=enabled),
-            gr.update(visible=not enabled),
-        ),
+        lambda enabled: gr.update(visible=enabled),
         inputs=[webcam_toggle],
-        outputs=[webcam_input, source_video_input],
+        outputs=[webcam_input],
     )
     flag_is_animal.change(change_animal_model, inputs=[flag_is_animal])
 
