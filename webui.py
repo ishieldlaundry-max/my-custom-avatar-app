@@ -92,6 +92,7 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
     "flag_color_match",
     "stitching_blending_radius",
     "diagnostic_mode",
+    "flag_virtual_camera_output",
 )
 
 
@@ -866,6 +867,14 @@ with gr.Blocks(
                         label="Diagnostic mode",
                         info="Show the driving-person comparison output.",
                     )
+                    flag_virtual_camera_output = gr.Checkbox(
+                        value=False,
+                        label="Enable virtual camera output",
+                        info=(
+                            "Broadcast frames while this render runs. For continuous live webcam "
+                            "output, launch camera.bat with --paste_back --virtual_camera."
+                        ),
+                    )
                 with gr.Row():
                     flag_relative_input = gr.Checkbox(
                         value=True,
@@ -1036,6 +1045,7 @@ with gr.Blocks(
             flag_color_match,
             stitching_blending_radius,
             diagnostic_mode,
+            flag_virtual_camera_output,
         ],
         outputs=[
             output_video_i2v,

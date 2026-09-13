@@ -1,0 +1,26 @@
+I am customizing a local FasterLivePortrait application. I edit and structure the code here in Replit (using CPU/ONNX mode for syntax verification and UI design), and then deploy and run the production code locally on my NVIDIA RTX 4070 Alienware laptop via TensorRT.
+
+Please refactor and upgrade my FasterLivePortrait codebase to support Real-Time Virtual Camera Output, alongside our established UI and color fixes:
+
+1. REAL-TIME VIRTUAL CAMERA OUTPUT INTEGRATION:
+- Integrate the `pyvirtualcam` Python library into the main video processing loop.
+- Add a toggle in the Gradio interface labeled "Enable Virtual Camera Output" (Boolean, default: False).
+- When enabled, send each rendered composited frame (`output_frame`) directly to `pyvirtualcam.Camera(width=..., height=..., fps=30)` in real time so the output functions as an active system webcam in external apps (Zoom, Discord, OBS).
+- Handle frame resizing gracefully so the virtual camera buffer matches the model output dimensions without crashing.
+- Wrap the virtual camera worker in a non-blocking thread or safe loop to prevent UI lag.
+
+2. SKIN TONE & COLOR MATCHING PIPELINE:
+- Retain the LAB/HSV color alignment / histogram matching module post-synthesis.
+- Ensure "Expression-Only Mode" keeps the body, hair, clothing, and background strictly frozen to the target image, updating only facial motion features.
+- Provide Gradio control sliders for "Stitching Margin / Mask Blending Radius" and "Enable Color Match".
+
+3. GRADIO CYBERPUNK CONTROL PANEL UI:
+- Maintain the dark cyberpunk theme and clean layout.
+- Hide the side-by-side diagnostic driving view by default; display ONLY the clean composited final avatar, with a toggle for "Diagnostic Mode" if needed.
+- Include easily accessible tabs for Target Media, Driving Webcam, Motion Controls, Eye & Lip Retargeting, and Mode Selection (TensorRT vs ONNX).
+
+4. DUAL-ENVIRONMENT COMPATIBILITY (REPLIT vs ALIENWARE):
+- Replit Environment: Default safely to `--mode onnx` with virtual camera dependencies mocked or conditionally imported, ensuring Replit builds and previews without CUDA errors.
+- Alienware Environment: Ensure `--mode trt` fully handles local GPU pipelines, FFmpeg outputs, and `pyvirtualcam` frame broadcasting.
+
+Please review the codebase, add `pyvirtualcam` to `requirements.txt`, update the rendering worker, and ensure all code is modular and clean.
