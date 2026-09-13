@@ -93,6 +93,7 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
     "stitching_blending_radius",
     "diagnostic_mode",
     "flag_virtual_camera_output",
+    "strict_target_identity",
 )
 
 
@@ -867,6 +868,12 @@ with gr.Blocks(
                         label="Diagnostic mode",
                         info="Show the driving-person comparison output.",
                     )
+                    strict_target_identity = gr.Checkbox(
+                        value=True,
+                        label="Strict target portrait identity",
+                        info="Locked: the driver supplies motion only; the target portrait supplies every visible pixel.",
+                        interactive=False,
+                    )
                     flag_virtual_camera_output = gr.Checkbox(
                         value=False,
                         label="Enable virtual camera output",
@@ -1046,6 +1053,7 @@ with gr.Blocks(
             stitching_blending_radius,
             diagnostic_mode,
             flag_virtual_camera_output,
+            strict_target_identity,
         ],
         outputs=[
             output_video_i2v,

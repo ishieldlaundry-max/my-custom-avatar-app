@@ -323,8 +323,20 @@ class FasterLivePortraitPipeline:
 
         return kp_driving_new
 
+    def _enforce_target_identity(self):
+        """Lock every output path to the target portrait's appearance."""
+        if not self.cfg.infer_params.get("strict_target_identity", True):
+            return
+        self.cfg.infer_params.flag_relative_motion = True
+        self.cfg.infer_params.flag_do_crop = True
+        self.cfg.infer_params.flag_pasteback = True
+        self.cfg.infer_params.flag_stitching = True
+        self.cfg.infer_params.animation_region = "exp"
+        self.cfg.infer_params.flag_color_match = True
+
     def _run(self, src_info, x_d_i_info, x_d_0_info, R_d_i, R_d_0, realtime, input_eye_ratio, input_lip_ratio,
              I_p_pstbk, **kwargs):
+        self._enforce_target_identity()
         out_crop, out_org = None, None
         eye_delta_before_animation = None
         for j in range(len(src_info)):
@@ -346,7 +358,7 @@ class FasterLivePortraitPipeline:
                         c_d_eye_before_animation_frame_zero, source_lmk)
                     eye_delta_before_animation = self.retarget_eye(x_s, combined_eye_ratio_tensor_before_animation)
 
-                if not realtime and self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and \
+                if self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and \
                         self.cfg.infer_params.flag_stitching:
                     mask_ori_float = prepare_paste_back(
                         self.mask_crop,
@@ -506,8 +518,9 @@ class FasterLivePortraitPipeline:
                     interpolation=cv2.INTER_LINEAR,
                 )
                 out_crop = align_lab_color_tensor(out_crop, color_reference, crop_mask)
-            if not realtime and self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and self.cfg.infer_params.flag_stitching:
-                # TODO: pasteback is slow, considering optimize it using multi-threading or GPU
+            if self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and self.cfg.infer_params.flag_stitching:
+                # Always paste onto I_p_pstbk, which is initialized from the
+                # target portrait—not the driving frame.
                 # I_p_pstbk = paste_back(out_crop, crop_info['M_c2o'], I_p_pstbk, mask_ori_float)
                 I_p_pstbk = paste_back_pytorch(out_crop, M, I_p_pstbk, mask_ori_float)
         return out_crop.to(dtype=torch.uint8).cpu().numpy(), I_p_pstbk.to(dtype=torch.uint8).cpu().numpy()

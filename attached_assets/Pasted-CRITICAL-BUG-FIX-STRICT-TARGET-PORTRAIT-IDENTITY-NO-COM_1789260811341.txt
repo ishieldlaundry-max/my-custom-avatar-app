@@ -1,0 +1,26 @@
+CRITICAL BUG FIX: STRICT TARGET PORTRAIT IDENTITY & NO COMPOSITED DRIVER BACKGROUND
+
+In the current output, the rendering pipeline is still compositing the animated face onto the driving frame, or blending driver environment elements instead of outputting the target portrait directly.
+
+Please update the core rendering logic with the following strict rules:
+
+1. TARGET PORTRAIT AS THE ONLY CANVAS (FULL REPLACEMENT):
+- The final output frame MUST use the uploaded Target Portrait image as its base canvas for every single rendered frame.
+- Do NOT paste the animated face back onto the driving video's frame or background.
+- The driving video/webcam feed MUST ONLY be used as a mathematical motion source (motion keypoints, head pose, eye expression, mouth shape). Zero pixels, background lighting, or physical features from the driving feed should appear in the final output.
+
+2. STRICT COLOR & SKIN TONE PRESERVATION:
+- Disable any dynamic lighting/color transfer that adapts the target image to match the driver's lighting conditions.
+- Enforce strict RGB/LAB color-locking to the target portrait's original color space so skin tones, hair, clothing, and background retain 100% of their original color fidelity without turning reflective, washed out, or desaturated.
+
+3. PRESERVE TARGET BODY, HAIR, & BACKGROUND:
+- Ensure "Expression-Only / Relative Motion" mode is strictly locked:
+  * Background: 100% frozen from target image.
+  * Body, hair, and clothing: 100% frozen from target image.
+  * Facial Features (eyes, mouth, cheeks): Animated strictly using the target image's textures.
+
+4. CLEAN VIRTUAL CAMERA & DISPLAY OUTPUT:
+- Route ONLY this clean, full-canvas target-avatar frame to the Virtual Camera (`pyvirtualcam`) and the main Gradio output display.
+- Hide all side-by-side diagnostic split views unless explicitly toggled on via a developer flag.
+
+Please refactor the inference/paste-back loop in Python to ensure the output looks 1:1 like the uploaded target picture animated, with no driving background artifacts.

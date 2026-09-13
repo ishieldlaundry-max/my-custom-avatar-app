@@ -72,6 +72,7 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             stitching_blending_radius=0.35,
             diagnostic_mode=False,
             flag_virtual_camera_output=False,
+            strict_target_identity=True,
     ):
         """ for video driven potrait animation
         """
@@ -95,6 +96,15 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             self.init_models(is_animal=flag_is_animal)
 
         if input_source_path and input_driving_path:
+            if strict_target_identity:
+                # The target portrait is the only appearance canvas. The
+                # driving input is used for motion extraction only.
+                flag_relative_input = True
+                flag_do_crop_input = True
+                flag_remap_input = True
+                flag_stitching = True
+                animation_region = "exp"
+                flag_color_match = True
             if flag_virtual_camera_output:
                 if v_tab_selection != "Video":
                     raise gr.Error(
