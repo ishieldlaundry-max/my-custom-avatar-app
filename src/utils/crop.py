@@ -462,10 +462,16 @@ def average_bbox_lst(bbox_lst):
     return np.mean(bbox_arr, axis=0).tolist()
 
 
-def prepare_paste_back(mask_crop, crop_M_c2o, dsize):
+def prepare_paste_back(mask_crop, crop_M_c2o, dsize, blending_radius=0.35):
     """prepare mask for later image paste back
     """
-    mask_ori = _transform_img(mask_crop, crop_M_c2o, dsize)
+    mask = mask_crop
+    radius = float(np.clip(blending_radius, 0.0, 1.0))
+    if radius > 0:
+        # Radius is normalized for the UI; convert it to a stable odd kernel.
+        kernel = max(3, int(round(min(mask.shape[:2]) * radius * 0.08)) | 1)
+        mask = cv2.GaussianBlur(mask, (kernel, kernel), 0)
+    mask_ori = _transform_img(mask, crop_M_c2o, dsize)
     mask_ori = mask_ori.astype(np.float32) / 255.
     return mask_ori
 

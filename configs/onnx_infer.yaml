@@ -86,7 +86,7 @@ crop_params:
 
 
 infer_params:
-  flag_crop_driving_video: False
+  flag_crop_driving_video: True
   flag_normalize_lip: True
   flag_source_video_eye_retargeting: False
   flag_video_editing_head_rotation: False
@@ -97,6 +97,14 @@ infer_params:
   flag_pasteback: True
   flag_do_crop: True
   flag_do_rot: True
+  flag_color_match: True
+  stitching_blending_radius: 0.35
+  strict_target_identity: True
+  expression_only: True
+  flag_landmark_scale_normalization: True
+  landmark_scale_min_ratio: 0.65
+  landmark_scale_max_ratio: 1.35
+  relative_motion_max_magnitude: 0.25
 
   # NOT EXPOERTED PARAMS
   lip_normalize_threshold: 0.03 # threshold for flag_normalize_lip
@@ -105,7 +113,7 @@ infer_params:
   anchor_frame: 0 # TO IMPLEMENT
   mask_crop_path: "./assets/mask_template.png"
   driving_multiplier: 1.0
-  animation_region: "all"
+  animation_region: "exp"
 
   cfg_mode: "incremental"
   cfg_scale: 1.2

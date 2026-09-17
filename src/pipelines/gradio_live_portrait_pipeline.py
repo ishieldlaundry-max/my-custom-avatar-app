@@ -25,6 +25,7 @@ from src.utils import utils
 import platform
 import torch
 from PIL import Image
+from ..utils.virtual_camera import VirtualCameraBroadcaster
 
 if platform.system().lower() == 'windows':
     FFMPEG = "third_party/ffmpeg-7.0.1-full_build/bin/ffmpeg.exe"
@@ -67,6 +68,11 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             v_tab_selection=None,
             cfg_scale=4.0,
             voice_name='af',
+            flag_color_match=True,
+            stitching_blending_radius=0.35,
+            diagnostic_mode=False,
+            flag_virtual_camera_output=False,
+            strict_target_identity=True,
     ):
         """ for video driven potrait animation
         """
@@ -90,6 +96,31 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             self.init_models(is_animal=flag_is_animal)
 
         if input_source_path and input_driving_path:
+            if strict_target_identity:
+                # The target portrait is the only appearance canvas. The
+                # driving input is used for motion extraction only.
+                flag_relative_input = True
+                flag_do_crop_input = True
+                flag_remap_input = True
+                flag_stitching = True
+                animation_region = "exp"
+                flag_color_match = True
+            if flag_virtual_camera_output:
+                if v_tab_selection != "Video":
+                    raise gr.Error(
+                        "Virtual camera output currently supports Driving Video or "
+                        "recorded webcam motion. Select the Driving Video tab.",
+                        duration=6,
+                    )
+                # A virtual camera must receive the clean composited frame, not
+                # an unchanged source canvas or an isolated generated crop.
+                flag_do_crop_input = True
+                flag_remap_input = True
+                flag_stitching = True
+                gr.Info(
+                    "Virtual camera enabled: crop, stitching, and portrait paste-back were enabled.",
+                    duration=4,
+                )
             args_user = {
                 'source': input_source_path,
                 'driving': input_driving_path,
@@ -108,7 +139,9 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
                 'dri_vy_ratio': vy_ratio_crop_driving_video,
                 'driving_smooth_observation_variance': driving_smooth_observation_variance,
                 'animation_region': animation_region,
-                'cfg_scale': cfg_scale
+                'cfg_scale': cfg_scale,
+                'flag_color_match': flag_color_match,
+                'stitching_blending_radius': stitching_blending_radius,
             }
             # update config from user input
             update_ret = self.update_cfg(args_user)
@@ -116,7 +149,8 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
                 # video driven animation
                 video_path, video_path_concat, total_time = self.run_video_driving(input_driving_path,
                                                                                    input_source_path,
-                                                                                   update_ret=update_ret)
+                                                                                   update_ret=update_ret,
+                                                                                   virtual_camera=flag_virtual_camera_output)
                 gr.Info(f"Run successfully! Cost: {total_time} seconds!", duration=3)
                 return gr.update(visible=True), video_path, gr.update(visible=True), video_path_concat, gr.update(
                     visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
@@ -222,34 +256,57 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
         vsave_org_path = os.path.join(save_dir,
                                       f"{os.path.basename(source_path)}-{os.path.basename(driving_video_path)}-org.mp4")
         vout_org = cv2.VideoWriter(vsave_org_path, fourcc, fps, (w, h))
+        virtual_camera = None
+        if kwargs.get("virtual_camera", False):
+            try:
+                virtual_camera = VirtualCameraBroadcaster(w, h, fps=30).start()
+            except BaseException:
+                vcap.release()
+                vout_crop.release()
+                vout_org.release()
+                raise
 
         infer_times = []
-        for i in tqdm(range(max_frame)):
-            ret, frame = vcap.read()
-            if not ret:
-                break
-            t0 = time.time()
-            first_frame = i == 0
-            if self.is_source_video:
-                dri_crop, out_crop, out_org = self.run(frame, self.src_imgs[i], self.src_infos[i],
-                                                       first_frame=first_frame)[:3]
-            else:
-                dri_crop, out_crop, out_org = self.run(frame, self.src_imgs[0], self.src_infos[0],
-                                                       first_frame=first_frame)[:3]
-            if out_crop is None:
-                print(f"no face in driving frame:{i}")
-                continue
-            infer_times.append(time.time() - t0)
-            dri_crop = cv2.resize(dri_crop, (512, 512))
-            out_crop = np.concatenate([dri_crop, out_crop], axis=1)
-            out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
-            vout_crop.write(out_crop)
-            out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
-            vout_org.write(out_org)
+        try:
+            for i in tqdm(range(max_frame)):
+                ret, frame = vcap.read()
+                if not ret:
+                    break
+                t0 = time.time()
+                first_frame = i == 0
+                if self.is_source_video:
+                    dri_crop, out_crop, out_org = self.run(
+                        frame, self.src_imgs[i], self.src_infos[i], first_frame=first_frame
+                    )[:3]
+                else:
+                    dri_crop, out_crop, out_org = self.run(
+                        frame, self.src_imgs[0], self.src_infos[0], first_frame=first_frame
+                    )[:3]
+                if out_crop is None:
+                    print(f"no face in driving frame:{i}")
+                    continue
+                if virtual_camera is not None:
+                    virtual_camera.send(out_org)
+                infer_times.append(time.time() - t0)
+                dri_crop = cv2.resize(dri_crop, (512, 512))
+                out_crop = np.concatenate([dri_crop, out_crop], axis=1)
+                out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
+                vout_crop.write(out_crop)
+                out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
+                vout_org.write(out_org)
+        except BaseException:
+            vcap.release()
+            vout_crop.release()
+            vout_org.release()
+            if virtual_camera is not None:
+                virtual_camera.close()
+            raise
         total_time = time.time() - t00
         vcap.release()
         vout_crop.release()
         vout_org.release()
+        if virtual_camera is not None:
+            virtual_camera.close()
 
         if video_has_audio(driving_video_path):
             vsave_crop_path_new = os.path.splitext(vsave_crop_path)[0] + "-audio.mp4"

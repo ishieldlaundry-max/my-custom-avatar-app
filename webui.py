@@ -5,6 +5,8 @@ The entrance of the gradio
 """
 import os
 import pdb
+import inspect
+import importlib.util
 
 import gradio as gr
 import os.path as osp
@@ -27,7 +29,7 @@ def existing_examples(*paths):
 import argparse
 
 parser = argparse.ArgumentParser(description='Faster Live Portrait Pipeline')
-parser.add_argument('--mode', required=False, type=str, default="onnx")
+parser.add_argument('--mode', required=False, choices=("onnx", "trt", "auto"), default="auto")
 parser.add_argument('--use_mp', action='store_true', help='use mediapipe or not')
 parser.add_argument(
     "--host_ip", type=str, default="127.0.0.1", help="host ip"
@@ -35,7 +37,23 @@ parser.add_argument(
 parser.add_argument("--port", type=int, default=9870, help="server port")
 args, unknown = parser.parse_known_args()
 
-if args.mode == "onnx":
+def resolve_runtime_mode(requested_mode):
+    """Select TRT only when both CUDA and the TensorRT package are available."""
+    if requested_mode == "onnx":
+        return "onnx"
+    try:
+        import torch
+        trt_available = importlib.util.find_spec("tensorrt") is not None
+        cuda_available = torch.cuda.is_available()
+    except (ImportError, RuntimeError):
+        trt_available = cuda_available = False
+    if requested_mode == "trt" and not (cuda_available and trt_available):
+        print("TensorRT was requested but is unavailable; falling back to ONNX.")
+    return "trt" if cuda_available and trt_available else "onnx"
+
+
+runtime_mode = resolve_runtime_mode(args.mode)
+if runtime_mode == "onnx":
     cfg_path = "configs/onnx_mp_infer.yaml" if args.use_mp else "configs/onnx_infer.yaml"
 else:
     cfg_path = "configs/trt_mp_infer.yaml" if args.use_mp else "configs/trt_infer.yaml"
@@ -43,10 +61,92 @@ infer_cfg = OmegaConf.load(cfg_path)
 gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
 
 
+VIDEO_PIPELINE_ARGUMENT_NAMES = (
+    "input_source_image_path",
+    "input_source_video_path",
+    "input_driving_video_path",
+    "input_driving_image_path",
+    "input_driving_pickle_path",
+    "input_driving_audio_path",
+    "input_driving_text",
+    "flag_relative_input",
+    "flag_do_crop_input",
+    "flag_remap_input",
+    "driving_multiplier",
+    "flag_stitching",
+    "flag_crop_driving_video_input",
+    "flag_video_editing_head_rotation",
+    "flag_is_animal",
+    "animation_region",
+    "scale",
+    "vx_ratio",
+    "vy_ratio",
+    "scale_crop_driving_video",
+    "vx_ratio_crop_driving_video",
+    "vy_ratio_crop_driving_video",
+    "driving_smooth_observation_variance",
+    "tab_selection",
+    "v_tab_selection",
+    "cfg_scale",
+    "voice_name",
+    "flag_color_match",
+    "stitching_blending_radius",
+    "diagnostic_mode",
+    "flag_virtual_camera_output",
+    "strict_target_identity",
+)
+
+
 def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam_video, *args, **kwargs):
-    """Keep the pipeline API unchanged while allowing the UI to select a webcam clip."""
-    selected_source_video = webcam_video if webcam_enabled else source_video
-    return gradio_pipeline.execute_video(source_image, selected_source_video, *args, **kwargs)
+    """Use webcam motion to drive the selected portrait across pipeline versions."""
+    values = list((source_image, source_video, *args))
+    if len(values) != len(VIDEO_PIPELINE_ARGUMENT_NAMES):
+        raise TypeError(
+            "The animation controls no longer match the video pipeline adapter: "
+            f"expected {len(VIDEO_PIPELINE_ARGUMENT_NAMES)} values, received {len(values)}."
+        )
+
+    # The portrait remains the source identity. Webcam capture replaces only
+    # the driving video, so the driver's appearance is never used as source.
+    source_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("tab_selection")
+    driving_tab_index = VIDEO_PIPELINE_ARGUMENT_NAMES.index("v_tab_selection")
+    if webcam_enabled and webcam_video:
+        values[2] = webcam_video
+        values[driving_tab_index] = "Video"
+
+    if values[source_tab_index] == "Image" and not values[0] and values[1]:
+        values[source_tab_index] = "Video"
+    elif values[source_tab_index] == "Video" and not values[1] and values[0]:
+        values[source_tab_index] = "Image"
+
+    # Prefer an available driving input if a hidden tab value is stale.
+    if values[driving_tab_index] == "Video" and not values[2] and values[3]:
+        values[driving_tab_index] = "Image"
+    elif values[driving_tab_index] == "Image" and not values[3] and values[2]:
+        values[driving_tab_index] = "Video"
+
+    diagnostic_mode = bool(values[VIDEO_PIPELINE_ARGUMENT_NAMES.index("diagnostic_mode")])
+    execute_video = gradio_pipeline.execute_video
+    supported_parameters = inspect.signature(execute_video).parameters
+    call_kwargs = {
+        name: value
+        for name, value in zip(VIDEO_PIPELINE_ARGUMENT_NAMES, values)
+        if name in supported_parameters
+    }
+    call_kwargs.update({
+        name: value
+        for name, value in kwargs.items()
+        if name in supported_parameters
+    })
+    result = execute_video(**call_kwargs)
+    if isinstance(result, (list, tuple)) and len(result) >= 8:
+        result = list(result)
+        # The pipeline's secondary outputs are diagnostic comparisons that
+        # include the driving person. Keep them hidden in the production UI.
+        result[2] = gr.update(visible=diagnostic_mode)
+        result[6] = gr.update(visible=diagnostic_mode)
+        return tuple(result)
+    return result
 
 
 def gpu_wrapped_execute_image(*args, **kwargs):
@@ -588,7 +688,7 @@ with gr.Blocks(
             webcam_toggle = gr.Checkbox(
                 value=False,
                 label="Enable webcam capture",
-                info="Use the local camera as the source video.",
+                info="Use the local camera as motion only; the target portrait keeps its identity.",
             )
             webcam_input = gr.Video(
                 sources=["webcam"],
@@ -756,14 +856,65 @@ with gr.Blocks(
 
             with gr.Accordion("Motion and render controls", open=False, elem_id="animation-controls"):
                 with gr.Row():
-                    flag_relative_input = gr.Checkbox(value=False, label="Relative motion")
+                    runtime_mode_control = gr.Radio(
+                        ["onnx", "trt"],
+                        value=runtime_mode,
+                        label="Runtime mode",
+                        info="Selected at launch. Restart with --mode onnx or --mode trt to change it.",
+                        interactive=False,
+                    )
+                    diagnostic_mode = gr.Checkbox(
+                        value=False,
+                        label="Diagnostic mode",
+                        info="Show the driving-person comparison output.",
+                    )
+                    strict_target_identity = gr.Checkbox(
+                        value=True,
+                        label="Strict target portrait identity",
+                        info="Locked: the driver supplies motion only; the target portrait supplies every visible pixel.",
+                        interactive=False,
+                    )
+                    flag_virtual_camera_output = gr.Checkbox(
+                        value=False,
+                        label="Enable virtual camera output",
+                        info=(
+                            "Broadcast frames while this render runs. For continuous live webcam "
+                            "output, launch camera.bat with --paste_back --virtual_camera."
+                        ),
+                    )
+                with gr.Row():
+                    flag_relative_input = gr.Checkbox(
+                        value=True,
+                        label="Identity-preserving relative motion",
+                    )
                     flag_stitching = gr.Checkbox(value=True, label="Stitching")
-                    flag_remap_input = gr.Checkbox(value=True, label="Paste-back")
+                    flag_remap_input = gr.Checkbox(
+                        value=True,
+                        label="Preserve portrait body/background",
+                    )
                     flag_is_animal = gr.Checkbox(value=False, label="Animal model")
+                with gr.Row():
+                    flag_color_match = gr.Checkbox(
+                        value=True,
+                        label="Enable color match",
+                        info="Match synthesized face color to the target portrait before paste-back.",
+                    )
+                    stitching_blending_radius = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.35,
+                        step=0.01,
+                        label="Stitching margin / mask blending radius",
+                    )
                 with gr.Row():
                     driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
                     cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
-                    animation_region = gr.Radio(["exp", "pose", "lip", "eyes", "all"], value="all", label="Animation region")
+                    animation_region = gr.Radio(
+                        ["exp", "pose", "lip", "eyes", "all"],
+                        value="exp",
+                        label="Animated region",
+                        info="Expression-only keeps the portrait's hair, body, and framing unchanged.",
+                    )
                 with gr.Row():
                     flag_crop_driving_video_input = gr.Checkbox(value=False, label="Crop driving video")
                     scale_crop_driving_video = gr.Number(value=2.2, label="Driving scale", minimum=1.8, maximum=3.2, step=0.05)
@@ -802,24 +953,25 @@ with gr.Blocks(
             gr.HTML('<div class="cyber-kicker" style="margin-top:18px;">04 / Final signal</div>')
             output_video_i2v = gr.Video(
                 autoplay=False,
-                label="Animated video / original image space",
+                label="Final avatar / portrait appearance preserved",
                 elem_id="output-video",
             )
             output_video_concat_i2v = gr.Video(
                 autoplay=False,
-                label="Animated video / composited result",
+                label="Diagnostic driving comparison",
                 elem_id="output-video-secondary",
+                visible=False,
             )
             output_image_i2i = gr.Image(
                 format="png",
                 type="numpy",
-                label="Animated image / original image space",
+                label="Final avatar / portrait appearance preserved",
                 visible=False,
             )
             output_image_concat_i2i = gr.Image(
                 format="png",
                 type="numpy",
-                label="Animated image / composited result",
+                label="Diagnostic driving comparison",
                 visible=False,
             )
 
@@ -853,12 +1005,9 @@ with gr.Blocks(
             )
 
     webcam_toggle.change(
-        lambda enabled: (
-            gr.update(visible=enabled),
-            gr.update(visible=not enabled),
-        ),
+        lambda enabled: gr.update(visible=enabled),
         inputs=[webcam_toggle],
-        outputs=[webcam_input, source_video_input],
+        outputs=[webcam_input],
     )
     flag_is_animal.change(change_animal_model, inputs=[flag_is_animal])
 
@@ -900,6 +1049,11 @@ with gr.Blocks(
             v_tab_selection,
             cfg_scale,
             voice_name,
+            flag_color_match,
+            stitching_blending_radius,
+            diagnostic_mode,
+            flag_virtual_camera_output,
+            strict_target_identity,
         ],
         outputs=[
             output_video_i2v,
