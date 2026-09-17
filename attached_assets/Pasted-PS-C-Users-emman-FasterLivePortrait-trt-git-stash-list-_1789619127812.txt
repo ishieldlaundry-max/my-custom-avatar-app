@@ -1,0 +1,824 @@
+PS C:\Users\emman\FasterLivePortrait-trt> git stash list
+stash@{0}: On master: Alienware local changes before custom repository sync
+PS C:\Users\emman\FasterLivePortrait-trt> .\webui.bat
+
+C:\Users\emman\FasterLivePortrait-trt>.\venv\python.exe .\webui.py --mode trt
+INFO:albumentations.check_version:A new version of Albumentations is available: 2.0.8 (you have 1.4.13). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.
+load Human Model >>>
+loading model: warping_spade
+{'name': 'WarpingSpadeModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/warping_spade-fix.trt'}
+loading model: motion_extractor
+{'name': 'MotionExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/motion_extractor.trt'}
+loading model: landmark
+{'name': 'LandmarkModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/landmark.trt'}
+loading model: face_analysis
+{'name': 'FaceAnalysisModel', 'predict_type': 'trt', 'model_path': ['./checkpoints/liveportrait_onnx/retinaface_det_static.trt', './checkpoints/liveportrait_onnx/face_2dpose_106_static.trt']}
+loading model: app_feat_extractor
+{'name': 'AppearanceFeatureExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/appearance_feature_extractor.trt'}
+trt
+loading model: stitching
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching.trt'}
+loading model: stitching_eye_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_eye.trt'}
+loading model: stitching_lip_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_lip.trt'}
+INFO:httpx:HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+Running on local URL:  http://127.0.0.1:9870
+INFO:httpx:HTTP Request: GET http://127.0.0.1:9870/startup-events "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: HEAD http://127.0.0.1:9870/ "HTTP/1.1 200 OK"
+
+To create a public link, set `share=True` in `launch()`.
+INFO:httpx:HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\analytics.py:106: UserWarning: IMPORTANT: You are using gradio version 4.38.1, however version 4.44.1 is available, please upgrade.
+--------
+  warnings.warn(
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 399, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 70, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\gradio\route_utils.py", line 714, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\routing.py", line 75, in app
+    await response(scope, receive, send)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\responses.py", line 352, in __call__
+    await send(
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 50, in sender
+    await send(message)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\_exception_handler.py", line 50, in sender
+    await send(message)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\starlette\middleware\errors.py", line 161, in _send
+    await send(message)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 534, in send
+    raise RuntimeError("Response content shorter than Content-Length")
+RuntimeError: Response content shorter than Content-Length
+add source:C:\Users\emman\AppData\Local\Temp\gradio\14c556dcad9b474ac60579c0aac7be45fae1c937\2d10eace9ef10ce6e73ebbb9d6ecb038.mp4 to infer cfg
+add driving:C:\Users\emman\AppData\Local\Temp\gradio\e51ee0f702084ab3fa5507f243bd78eb1671d88b\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg to infer cfg
+update infer cfg flag_relative_motion from True to True
+update infer cfg flag_do_crop from True to True
+update infer cfg flag_pasteback from True to True
+update infer cfg driving_multiplier from 1.0 to 1
+update infer cfg flag_stitching from True to True
+update infer cfg flag_crop_driving_video from True to False
+update infer cfg flag_video_editing_head_rotation from False to False
+update crop cfg src_scale from 2.3 to 2.3
+update crop cfg src_vx_ratio from 0.0 to 0
+update crop cfg src_vy_ratio from -0.125 to -0.125
+update crop cfg dri_scale from 2.2 to 2.2
+update crop cfg dri_vx_ratio from 0.0 to 0
+update crop cfg dri_vy_ratio from -0.1 to -0.1
+update infer cfg driving_smooth_observation_variance from 1e-07 to 1e-07
+update infer cfg animation_region from exp to exp
+update infer cfg cfg_scale from 1.2 to 4
+update infer cfg flag_color_match from True to True
+update infer cfg stitching_blending_radius from 0.35 to 0.35
+process source:C:\Users\emman\AppData\Local\Temp\gradio\14c556dcad9b474ac60579c0aac7be45fae1c937\2d10eace9ef10ce6e73ebbb9d6ecb038.mp4 >>>>>>>>
+ 26%|█████████████████████████                                                                         | 484/1890 [00:23<01:15, 18.68it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 26%|█████████████████████████▍                                                                        | 490/1890 [00:23<00:49, 28.14it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 26%|█████████████████████████▊                                                                        | 499/1890 [00:23<00:32, 42.80it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 27%|██████████████████████████▎                                                                       | 507/1890 [00:24<00:26, 52.44it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 27%|██████████████████████████▋                                                                       | 515/1890 [00:24<00:23, 59.66it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 28%|███████████████████████████▏                                                                      | 524/1890 [00:24<00:20, 66.04it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 28%|███████████████████████████▋                                                                      | 533/1890 [00:24<00:18, 71.98it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 29%|████████████████████████████                                                                      | 542/1890 [00:24<00:17, 74.91it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 29%|████████████████████████████▌                                                                     | 551/1890 [00:24<00:17, 76.65it/s]No face detected in the this image.
+ 49%|███████████████████████████████████████████████▌                                                  | 917/1890 [00:45<00:54, 17.95it/s]No face detected in the this image.
+ 49%|███████████████████████████████████████████████▋                                                  | 920/1890 [00:45<00:47, 20.42it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 49%|████████████████████████████████████████████████▏                                                 | 929/1890 [00:45<00:25, 37.90it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 50%|████████████████████████████████████████████████▋                                                 | 939/1890 [00:45<00:17, 52.99it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 50%|█████████████████████████████████████████████████▏                                                | 949/1890 [00:45<00:14, 65.45it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 51%|█████████████████████████████████████████████████▋                                                | 959/1890 [00:46<00:12, 74.55it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 51%|██████████████████████████████████████████████████▎                                               | 970/1890 [00:46<00:11, 82.65it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 52%|██████████████████████████████████████████████████▊                                               | 981/1890 [00:46<00:10, 89.28it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 52%|███████████████████████████████████████████████████▍                                              | 992/1890 [00:46<00:09, 94.48it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 53%|██████████████████████████████████████████████████▉                                             | 1004/1890 [00:46<00:08, 100.68it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 54%|███████████████████████████████████████████████████▌                                            | 1016/1890 [00:46<00:08, 103.29it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 60%|█████████████████████████████████████████████████████████▉                                       | 1130/1890 [00:52<00:38, 19.60it/s]No face detected in the this image.
+ 60%|██████████████████████████████████████████████████████████▏                                      | 1133/1890 [00:52<00:34, 21.88it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 60%|██████████████████████████████████████████████████████████▋                                      | 1143/1890 [00:52<00:18, 40.61it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 61%|███████████████████████████████████████████████████████████▏                                     | 1153/1890 [00:52<00:13, 54.40it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 61%|███████████████████████████████████████████████████████████▋                                     | 1162/1890 [00:52<00:11, 62.34it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 66%|███████████████████████████████████████████████████████████████▊                                 | 1244/1890 [00:57<00:39, 16.26it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 66%|████████████████████████████████████████████████████████████████▎                                | 1252/1890 [00:57<00:20, 31.74it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 67%|████████████████████████████████████████████████████████████████▋                                | 1260/1890 [00:57<00:14, 43.28it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 67%|█████████████████████████████████████████████████████████████████                                | 1267/1890 [00:57<00:12, 49.35it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 67%|█████████████████████████████████████████████████████████████████▍                               | 1274/1890 [00:57<00:11, 54.59it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 68%|█████████████████████████████████████████████████████████████████▊                               | 1282/1890 [00:57<00:10, 59.94it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 68%|██████████████████████████████████████████████████████████████████▎                              | 1291/1890 [00:57<00:08, 67.21it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 69%|██████████████████████████████████████████████████████████████████▋                              | 1300/1890 [00:57<00:08, 73.37it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 69%|███████████████████████████████████████████████████████████████████▎                             | 1311/1890 [00:58<00:06, 82.79it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 70%|███████████████████████████████████████████████████████████████████▋                             | 1320/1890 [00:58<00:06, 84.54it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 70%|████████████████████████████████████████████████████████████████████▎                            | 1330/1890 [00:58<00:06, 88.56it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 71%|████████████████████████████████████████████████████████████████████▊                            | 1340/1890 [00:58<00:06, 89.75it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 71%|█████████████████████████████████████████████████████████████████████▎                           | 1350/1890 [00:58<00:06, 89.55it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 72%|█████████████████████████████████████████████████████████████████████▊                           | 1360/1890 [00:58<00:05, 91.52it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 72%|██████████████████████████████████████████████████████████████████████▎                          | 1370/1890 [00:58<00:05, 93.32it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 73%|██████████████████████████████████████████████████████████████████████▊                          | 1380/1890 [00:58<00:05, 94.22it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 74%|███████████████████████████████████████████████████████████████████████▍                         | 1391/1890 [00:58<00:05, 96.21it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 74%|███████████████████████████████████████████████████████████████████████▉                         | 1401/1890 [00:58<00:05, 94.56it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 75%|████████████████████████████████████████████████████████████████████████▍                        | 1411/1890 [00:59<00:05, 94.43it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 75%|████████████████████████████████████████████████████████████████████████▉                        | 1421/1890 [00:59<00:05, 93.24it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 94%|██████████████████████████████████████████████████████████████████████████████████████████▊      | 1770/1890 [01:18<00:07, 17.12it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 94%|███████████████████████████████████████████████████████████████████████████████████████████▎     | 1778/1890 [01:18<00:03, 33.72it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 94%|███████████████████████████████████████████████████████████████████████████████████████████▋     | 1786/1890 [01:18<00:02, 46.18it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 95%|████████████████████████████████████████████████████████████████████████████████████████████     | 1794/1890 [01:19<00:01, 54.24it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 95%|████████████████████████████████████████████████████████████████████████████████████████████▍    | 1802/1890 [01:19<00:01, 60.66it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 96%|████████████████████████████████████████████████████████████████████████████████████████████▉    | 1810/1890 [01:19<00:01, 63.29it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 96%|█████████████████████████████████████████████████████████████████████████████████████████████▎   | 1818/1890 [01:19<00:01, 66.86it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 97%|█████████████████████████████████████████████████████████████████████████████████████████████▋   | 1826/1890 [01:19<00:00, 68.92it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 97%|██████████████████████████████████████████████████████████████████████████████████████████████▏  | 1834/1890 [01:19<00:00, 70.84it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 97%|██████████████████████████████████████████████████████████████████████████████████████████████▌  | 1842/1890 [01:19<00:00, 72.40it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 98%|██████████████████████████████████████████████████████████████████████████████████████████████▉  | 1850/1890 [01:19<00:00, 73.93it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 98%|███████████████████████████████████████████████████████████████████████████████████████████████▎ | 1858/1890 [01:19<00:00, 75.01it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 99%|███████████████████████████████████████████████████████████████████████████████████████████████▊ | 1868/1890 [01:19<00:00, 81.05it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+ 99%|████████████████████████████████████████████████████████████████████████████████████████████████▎| 1877/1890 [01:20<00:00, 80.15it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+100%|████████████████████████████████████████████████████████████████████████████████████████████████▊| 1886/1890 [01:20<00:00, 79.54it/s]No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+No face detected in the this image.
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████| 1890/1890 [01:20<00:00, 23.55it/s]
+finish process source:C:\Users\emman\AppData\Local\Temp\gradio\14c556dcad9b474ac60579c0aac7be45fae1c937\2d10eace9ef10ce6e73ebbb9d6ecb038.mp4 >>>>>>>>
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\torch\functional.py:513: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\builder\windows\pytorch\aten\src\ATen\native\TensorShape.cpp:3610.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\torch\nn\functional.py:4373: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+update infer cfg source from C:\Users\emman\AppData\Local\Temp\gradio\14c556dcad9b474ac60579c0aac7be45fae1c937\2d10eace9ef10ce6e73ebbb9d6ecb038.mp4 to C:\Users\emman\AppData\Local\Temp\gradio\e51ee0f702084ab3fa5507f243bd78eb1671d88b\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg
+update infer cfg driving from C:\Users\emman\AppData\Local\Temp\gradio\e51ee0f702084ab3fa5507f243bd78eb1671d88b\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg to C:\Users\emman\AppData\Local\Temp\gradio\50739b060989afe04f22e2550fc178931e2140dc\video.mp4
+update infer cfg flag_relative_motion from True to True
+update infer cfg flag_do_crop from True to True
+update infer cfg flag_pasteback from True to True
+update infer cfg driving_multiplier from 1 to 1
+update infer cfg flag_stitching from True to True
+update infer cfg flag_crop_driving_video from True to False
+update infer cfg flag_video_editing_head_rotation from False to False
+update crop cfg src_scale from 2.3 to 2.3
+update crop cfg src_vx_ratio from 0 to 0
+update crop cfg src_vy_ratio from -0.125 to -0.125
+update crop cfg dri_scale from 2.2 to 2.2
+update crop cfg dri_vx_ratio from 0 to 0
+update crop cfg dri_vy_ratio from -0.1 to -0.1
+update infer cfg driving_smooth_observation_variance from 1e-07 to 1e-07
+update infer cfg animation_region from exp to exp
+update infer cfg cfg_scale from 4 to 4
+update infer cfg flag_color_match from True to True
+update infer cfg stitching_blending_radius from 0.35 to 0.35
+process source:C:\Users\emman\AppData\Local\Temp\gradio\e51ee0f702084ab3fa5507f243bd78eb1671d88b\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg >>>>>>>>
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  2.38it/s]
+finish process source:C:\Users\emman\AppData\Local\Temp\gradio\e51ee0f702084ab3fa5507f243bd78eb1671d88b\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg >>>>>>>>
+  0%|                                                                                                             | 0/185 [00:00<?, ?it/s]C:\Users\emman\FasterLivePortrait-trt\venv\lib\site-packages\torch\nn\functional.py:4373: UserWarning: Default grid_sample and affine_grid behavior has changed to align_corners=False since 1.3.0. Please specify align_corners=True if the old behavior is desired. See the documentation of grid_sample for details.
+  warnings.warn(
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████| 185/185 [01:00<00:00,  3.03it/s]
+ffmpeg version 7.0.1-full_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
+  built with gcc 13.2.0 (Rev5, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-libsnappy --enable-zlib --enable-librist --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-libbluray --enable-libcaca --enable-sdl2 --enable-libaribb24 --enable-libaribcaption --enable-libdav1d --enable-libdavs2 --enable-libuavs3d --enable-libxevd --enable-libzvbi --enable-librav1e --enable-libsvtav1 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxeve --enable-libxvid --enable-libaom --enable-libjxl --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-frei0r --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-liblensfun --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libshaderc --enable-vulkan --enable-libplacebo --enable-opencl --enable-libcdio --enable-libgme --enable-libmodplug --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libshine --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libcodec2 --enable-libilbc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-ladspa --enable-libbs2b --enable-libflite --enable-libmysofa --enable-librubberband --enable-libsoxr --enable-chromaprint
+  libavutil      59.  8.100 / 59.  8.100
+  libavcodec     61.  3.100 / 61.  3.100
+  libavformat    61.  1.100 / 61.  1.100
+  libavdevice    61.  1.100 / 61.  1.100
+  libavfilter    10.  1.100 / 10.  1.100
+  libswscale      8.  1.100 /  8.  1.100
+  libswresample   5.  1.100 /  5.  1.100
+  libpostproc    58.  1.100 / 58.  1.100
+Trailing option(s) found in the command: may be ignored.
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from './results/2026-09-17-060124\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg-video.mp4-crop.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:06.17, start: 0.000000, bitrate: 3392 kb/s
+  Stream #0:0[0x1](und): Video: mpeg4 (Simple Profile) (mp4v / 0x7634706D), yuv420p, 1024x512 [SAR 1:1 DAR 2:1], 3389 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+Input #1, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\Users\emman\AppData\Local\Temp\gradio\50739b060989afe04f22e2550fc178931e2140dc\video.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf59.27.100
+    comment         : vid:v14044g50000dag4r5vog65iqlbtliqg
+  Duration: 00:00:06.17, start: 0.000000, bitrate: 748 kb/s
+  Stream #1:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 576x1024 [SAR 1:1 DAR 9:16], 608 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc59.37.100 libx264
+  Stream #1:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (mpeg4 (native) -> h264 (libx264))
+  Stream #1:1 -> #0:1 (aac (native) -> aac (native))
+Press [q] to stop, [?] for help
+[libx264 @ 000001e08e956980] using SAR=1/1
+[libx264 @ 000001e08e956980] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 000001e08e956980] profile High, level 3.2, 4:2:0, 8-bit
+[libx264 @ 000001e08e956980] 264 - core 164 r3191 4613ac3 - H.264/MPEG-4 AVC codec - Copyleft 2003-2024 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=16 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=abr mbtree=1 bitrate=10000 ratetol=1.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to './results/2026-09-17-060124\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg-video.mp4-crop-audio.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2mp41
+    encoder         : Lavf61.1.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), 1024x512 [SAR 1:1 DAR 2:1], q=2-31, 10000 kb/s, 30 fps, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.3.100 libx264
+      Side data:
+        cpb: bitrate max/min/avg: 0/0/10000000 buffer size: 0 vbv_delay: N/A
+  Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.3.100 aac
+[out#0/mp4 @ 000001e08e8c8700] video:6923KiB audio:97KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.110235%
+frame=  185 fps=0.0 q=-1.0 Lsize=    7028KiB time=00:00:06.10 bitrate=9437.7kbits/s speed=7.67x
+[libx264 @ 000001e08e956980] frame I:1     Avg QP: 6.42  size: 56326
+[libx264 @ 000001e08e956980] frame P:75    Avg QP: 6.97  size: 61123
+[libx264 @ 000001e08e956980] frame B:109   Avg QP:11.37  size: 22459
+[libx264 @ 000001e08e956980] consecutive B-frames: 17.3%  6.5% 17.8% 58.4%
+[libx264 @ 000001e08e956980] mb I  I16..4: 35.5% 57.2%  7.3%
+[libx264 @ 000001e08e956980] mb P  I16..4:  3.6%  6.5%  5.6%  P16..4: 26.7% 19.4% 15.6%  0.0%  0.0%    skip:22.6%
+[libx264 @ 000001e08e956980] mb B  I16..4:  0.3%  1.3%  0.5%  B16..8: 38.6% 16.3%  7.5%  direct: 6.3%  skip:29.2%  L0:48.1% L1:28.3% BI:23.5%
+[libx264 @ 000001e08e956980] final ratefactor: 5.70
+[libx264 @ 000001e08e956980] 8x8 transform intra:45.0% inter:58.4%
+[libx264 @ 000001e08e956980] coded y,uvDC,uvAC intra: 67.2% 71.3% 57.7% inter: 39.4% 36.2% 23.5%
+[libx264 @ 000001e08e956980] i16 v,h,dc,p: 67% 18% 11%  3%
+[libx264 @ 000001e08e956980] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 27% 25% 26%  3%  3%  4%  4%  4%  5%
+[libx264 @ 000001e08e956980] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 34% 26% 11%  4%  6%  5%  6%  4%  4%
+[libx264 @ 000001e08e956980] i8c dc,h,v,p: 44% 23% 26%  7%
+[libx264 @ 000001e08e956980] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 000001e08e956980] ref P L0: 71.7% 12.8% 10.2%  5.4%
+[libx264 @ 000001e08e956980] ref B L0: 92.8%  5.6%  1.6%
+[libx264 @ 000001e08e956980] ref B L1: 97.9%  2.1%
+[libx264 @ 000001e08e956980] kb/s:9196.01
+[aac @ 000001e08e94ca00] Qavg: 672.044
+ffmpeg version 7.0.1-full_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
+  built with gcc 13.2.0 (Rev5, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-libsnappy --enable-zlib --enable-librist --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-libbluray --enable-libcaca --enable-sdl2 --enable-libaribb24 --enable-libaribcaption --enable-libdav1d --enable-libdavs2 --enable-libuavs3d --enable-libxevd --enable-libzvbi --enable-librav1e --enable-libsvtav1 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxeve --enable-libxvid --enable-libaom --enable-libjxl --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-frei0r --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-liblensfun --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libshaderc --enable-vulkan --enable-libplacebo --enable-opencl --enable-libcdio --enable-libgme --enable-libmodplug --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libshine --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libcodec2 --enable-libilbc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-ladspa --enable-libbs2b --enable-libflite --enable-libmysofa --enable-librubberband --enable-libsoxr --enable-chromaprint
+  libavutil      59.  8.100 / 59.  8.100
+  libavcodec     61.  3.100 / 61.  3.100
+  libavformat    61.  1.100 / 61.  1.100
+  libavdevice    61.  1.100 / 61.  1.100
+  libavfilter    10.  1.100 / 10.  1.100
+  libswscale      8.  1.100 /  8.  1.100
+  libswresample   5.  1.100 /  5.  1.100
+  libpostproc    58.  1.100 / 58.  1.100
+Trailing option(s) found in the command: may be ignored.
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from './results/2026-09-17-060124\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg-video.mp4-org.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2mp41
+    encoder         : Lavf58.76.100
+  Duration: 00:00:06.17, start: 0.000000, bitrate: 3560 kb/s
+  Stream #0:0[0x1](und): Video: mpeg4 (Simple Profile) (mp4v / 0x7634706D), yuv420p, 1078x1080 [SAR 1:1 DAR 539:540], 3558 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+Input #1, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\Users\emman\AppData\Local\Temp\gradio\50739b060989afe04f22e2550fc178931e2140dc\video.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf59.27.100
+    comment         : vid:v14044g50000dag4r5vog65iqlbtliqg
+  Duration: 00:00:06.17, start: 0.000000, bitrate: 748 kb/s
+  Stream #1:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 576x1024 [SAR 1:1 DAR 9:16], 608 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc59.37.100 libx264
+  Stream #1:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (mpeg4 (native) -> h264 (libx264))
+  Stream #1:1 -> #0:1 (aac (native) -> aac (native))
+Press [q] to stop, [?] for help
+[libx264 @ 000002f6a2908380] using SAR=1/1
+[libx264 @ 000002f6a2908380] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 000002f6a2908380] profile High, level 3.2, 4:2:0, 8-bit
+[libx264 @ 000002f6a2908380] 264 - core 164 r3191 4613ac3 - H.264/MPEG-4 AVC codec - Copyleft 2003-2024 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=34 lookahead_threads=5 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=abr mbtree=1 bitrate=10000 ratetol=1.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to './results/2026-09-17-060124\WhatsApp Image 2026-08-01 at 21.35.37 (1).jpeg-video.mp4-org-audio.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2mp41
+    encoder         : Lavf61.1.100
+  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), 1078x1080 [SAR 1:1 DAR 539:540], q=2-31, 10000 kb/s, 30 fps, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.3.100 libx264
+      Side data:
+        cpb: bitrate max/min/avg: 0/0/10000000 buffer size: 0 vbv_delay: N/A
+  Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.3.100 aac
+[out#0/mp4 @ 000002f6a3046a40] video:6977KiB audio:97KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.110288%
+frame=  185 fps=0.0 q=-1.0 Lsize=    7082KiB time=00:00:06.10 bitrate=9510.5kbits/s speed=7.08x
+[libx264 @ 000002f6a2908380] frame I:1     Avg QP: 8.12  size: 58807
+[libx264 @ 000002f6a2908380] frame P:71    Avg QP: 6.82  size: 62459
+[libx264 @ 000002f6a2908380] frame B:113   Avg QP:11.67  size: 23457
+[libx264 @ 000002f6a2908380] consecutive B-frames: 15.1%  8.6%  4.9% 71.4%
+[libx264 @ 000002f6a2908380] mb I  I16..4: 37.1% 58.8%  4.1%
+[libx264 @ 000002f6a2908380] mb P  I16..4:  1.8%  6.5%  4.3%  P16..4: 14.2% 10.5%  8.0%  0.0%  0.0%    skip:54.8%
+[libx264 @ 000002f6a2908380] mb B  I16..4:  0.1%  1.7%  0.5%  B16..8: 21.6%  9.2%  3.6%  direct: 4.2%  skip:59.0%  L0:47.8% L1:26.5% BI:25.7%
+[libx264 @ 000002f6a2908380] final ratefactor: 6.93
+[libx264 @ 000002f6a2908380] 8x8 transform intra:56.5% inter:63.8%
+[libx264 @ 000002f6a2908380] coded y,uvDC,uvAC intra: 75.3% 78.1% 65.8% inter: 21.5% 18.2% 8.9%
+[libx264 @ 000002f6a2908380] i16 v,h,dc,p: 70% 11% 11%  8%
+[libx264 @ 000002f6a2908380] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 31% 18% 23%  3%  4%  7%  4%  4%  4%
+[libx264 @ 000002f6a2908380] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 35% 21%  9%  4%  7%  8%  6%  5%  4%
+[libx264 @ 000002f6a2908380] i8c dc,h,v,p: 44% 19% 29%  9%
+[libx264 @ 000002f6a2908380] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 000002f6a2908380] ref P L0: 70.8% 13.4% 10.4%  5.4%
+[libx264 @ 000002f6a2908380] ref B L0: 92.8%  5.3%  1.9%
+[libx264 @ 000002f6a2908380] ref B L1: 97.6%  2.4%
+[libx264 @ 000002f6a2908380] kb/s:9267.96
+[aac @ 000002f6a2951c40] Qavg: 672.044
+ERROR:asyncio:Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\emman\FasterLivePortrait-trt\venv\lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
