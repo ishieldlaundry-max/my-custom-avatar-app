@@ -609,7 +609,7 @@ class FasterLivePortraitPipeline:
         img_bgr = image
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         I_p_pstbk = self._get_target_canvas_tensor(img_src)
-        realtime = kwargs.get("realtime", False)
+        realtime = kwargs.pop("realtime", False)
         if self.cfg.infer_params.flag_crop_driving_video:
             if self.src_lmk_pre is None:
                 src_face = self.model_dict["face_analysis"].predict(img_bgr)
@@ -695,7 +695,7 @@ class FasterLivePortraitPipeline:
     def run_with_pkl(self, dri_motion_info, img_src, src_info, **kwargs):
         self._enforce_target_identity()
         I_p_pstbk = self._get_target_canvas_tensor(img_src)
-        realtime = kwargs.get("realtime", False)
+        realtime = kwargs.pop("realtime", False)
 
         input_eye_ratio = dri_motion_info[1]
         input_lip_ratio = dri_motion_info[2]

@@ -1,6 +1,7 @@
 import numpy as np
 from omegaconf import OmegaConf
 
+import src.pipelines.faster_live_portrait_pipeline as pipeline_module
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 
 
@@ -69,3 +70,82 @@ def test_relative_expression_is_scaled_and_bounded_to_target_landmarks():
     displacement = np.linalg.norm(mapped - source["exp"], axis=-1)
 
     assert np.all(displacement <= 0.25 + 1e-6)
+
+
+def test_realtime_flag_is_forwarded_once(monkeypatch):
+    pipeline = FasterLivePortraitPipeline.__new__(FasterLivePortraitPipeline)
+    pipeline.cfg = OmegaConf.create(
+        {"infer_params": {"flag_crop_driving_video": False}}
+    )
+    landmarks = np.zeros((106, 2), dtype=np.float32)
+    motion = np.zeros((1, 1), dtype=np.float32)
+    keypoints = np.zeros((1, 21, 3), dtype=np.float32)
+
+    class Predictor:
+        def __init__(self, result):
+            self.result = result
+
+        def predict(self, *_args):
+            return self.result
+
+    pipeline.model_dict = {
+        "face_analysis": Predictor([landmarks]),
+        "landmark": Predictor(landmarks),
+        "motion_extractor": Predictor(
+            (motion, motion, motion, motion, keypoints, motion, keypoints)
+        ),
+    }
+    pipeline.src_lmk_pre = None
+    pipeline.R_d_0 = None
+    pipeline.x_d_0_info = None
+    pipeline._enforce_target_identity = lambda: None
+    pipeline._get_target_canvas_tensor = lambda _img: np.zeros(
+        (4, 4, 3), dtype=np.uint8
+    )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "calc_eye_close_ratio",
+        lambda _landmarks: np.zeros((1, 2), dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "calc_lip_close_ratio",
+        lambda _landmarks: np.zeros((1, 1), dtype=np.float32),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "get_rotation_matrix",
+        lambda *_args: np.eye(3, dtype=np.float32)[None],
+    )
+
+    forwarded = {}
+
+    def fake_run(
+        src_info,
+        x_d_i_info,
+        x_d_0_info,
+        R_d_i,
+        R_d_0,
+        realtime,
+        input_eye_ratio,
+        input_lip_ratio,
+        canvas,
+        **kwargs,
+    ):
+        forwarded["realtime"] = realtime
+        forwarded["kwargs"] = kwargs
+        return np.zeros((4, 4, 3), dtype=np.uint8), canvas
+
+    pipeline._run = fake_run
+
+    pipeline.run(
+        np.zeros((4, 4, 3), dtype=np.uint8),
+        np.zeros((4, 4, 3), dtype=np.uint8),
+        [object()],
+        first_frame=True,
+        realtime=True,
+    )
+
+    assert forwarded["realtime"] is True
+    assert "realtime" not in forwarded["kwargs"]
