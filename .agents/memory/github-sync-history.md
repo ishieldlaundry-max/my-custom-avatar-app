@@ -14,3 +14,9 @@ The Replit Git pane and shell push can continue rejecting a correctly shaped `GI
 **Why:** Replit automatically creates commits for workspace artifacts, which can make the local branch appear substantially ahead without representing source changes that belong in GitHub.
 
 **How to apply:** Compare `git diff --name-status origin/main..HEAD` before attempting more authentication retries. For Alienware validation, use the already-published GitHub `main` when it contains the required source changes; only reconcile or clean the local branch after explicit approval.
+
+When the Git pane still reports `UNAUTHENTICATED`, a complete authenticated `GIT_URL` secret can be used directly with `git push "$GIT_URL" main:main`; the push may succeed even while the pane's own credential remains unusable.
+
+**Why:** The shell push path accepts the authenticated URL independently of the Git pane's stored remote credential.
+
+**How to apply:** Keep the token only in Replit Secrets, never in chat or files, and redact command output. Confirm the replacement token has been revoked if it was ever pasted into a message.
