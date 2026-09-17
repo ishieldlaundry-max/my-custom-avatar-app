@@ -17,7 +17,7 @@ class FakeCamera:
         self.frames.append(frame.copy())
 
     def sleep_until_next_frame(self):
-        return None
+        time.sleep(1.0 / self.fps)
 
     def close(self):
         self.closed = True
@@ -55,3 +55,19 @@ def test_broadcaster_reports_backend_startup_failure():
         assert "no virtual camera backend" in str(exc)
     else:
         raise AssertionError("Expected virtual camera startup to fail.")
+
+
+def test_broadcaster_repeats_latest_frame_at_fixed_rate():
+    cameras = []
+
+    def factory(**kwargs):
+        camera = FakeCamera(**kwargs)
+        cameras.append(camera)
+        return camera
+
+    broadcaster = VirtualCameraBroadcaster(16, 16, fps=30, camera_factory=factory).start()
+    broadcaster.send(np.zeros((16, 16, 3), dtype=np.uint8))
+    time.sleep(0.09)
+    broadcaster.close()
+
+    assert len(cameras[0].frames) >= 2

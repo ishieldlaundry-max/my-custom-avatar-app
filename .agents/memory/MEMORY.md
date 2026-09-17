@@ -3,3 +3,4 @@
 - [Local NVIDIA workflow](local-nvidia-workflow.md) — Replit is used to edit the Gradio front end; inference and microphone use happen on the user's Windows laptop.
 - [Windows bundle compatibility](windows-bundle-compatibility.md) — the TensorRT bundle may expose an older pipeline API; UI adapters must pass only supported named parameters.
 - [Browser audio mocks](browser-audio-mocks.md) — Chromium may ignore replacing navigator.mediaDevices; override getUserMedia on the existing object.
+- [Realtime motion fidelity](realtime-motion-fidelity.md) — drop stale webcam frames, repeat the newest output at 30 FPS, and map only target-scaled relative expression deltas.

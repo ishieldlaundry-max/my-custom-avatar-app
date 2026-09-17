@@ -91,12 +91,16 @@ class VirtualCameraBroadcaster:
                     fps=self.fps,
                 )
             self._ready.set()
+            latest_frame = None
             while not self._stop.is_set():
                 try:
-                    frame = self._frames.get(timeout=0.1)
+                    latest_frame = self._frames.get(
+                        timeout=0.1 if latest_frame is None else 0
+                    )
                 except queue.Empty:
-                    continue
-                camera.send(frame)
+                    if latest_frame is None:
+                        continue
+                camera.send(latest_frame)
                 camera.sleep_until_next_frame()
         except Exception as exc:
             self._error = exc

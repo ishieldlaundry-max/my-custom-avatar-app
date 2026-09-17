@@ -115,6 +115,10 @@ class FasterLivePortraitPipeline:
         self.src_imgs = []
         self.is_source_video = False
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self._target_canvas_key = None
+        self._target_canvas_tensor = None
+        self._color_reference_key = None
+        self._color_reference_tensors = None
 
     def calc_combined_eye_ratio(self, c_d_eyes_i, source_lmk):
         c_s_eyes = calc_eye_close_ratio(source_lmk[None])
@@ -329,10 +333,88 @@ class FasterLivePortraitPipeline:
             return
         self.cfg.infer_params.flag_relative_motion = True
         self.cfg.infer_params.flag_do_crop = True
+        self.cfg.infer_params.flag_crop_driving_video = True
         self.cfg.infer_params.flag_pasteback = True
         self.cfg.infer_params.flag_stitching = True
+        self.cfg.infer_params.expression_only = True
         self.cfg.infer_params.animation_region = "exp"
         self.cfg.infer_params.flag_color_match = True
+        self.cfg.infer_params.flag_landmark_scale_normalization = True
+        radius = float(self.cfg.infer_params.get("stitching_blending_radius", 0.35))
+        self.cfg.infer_params.stitching_blending_radius = float(np.clip(radius, 0.2, 0.45))
+
+    @staticmethod
+    def _landmark_scale(keypoints):
+        """Return a stable per-face RMS radius for canonical keypoints."""
+        points = np.asarray(keypoints, dtype=np.float32)[..., :2]
+        centered = points - points.mean(axis=-2, keepdims=True)
+        scale = np.sqrt(np.mean(np.sum(centered * centered, axis=-1), axis=-1))
+        return np.maximum(scale, 1e-6).reshape(-1, 1, 1)
+
+    def _map_relative_expression(self, source_info, driving_info, driving_zero_info):
+        """Map driver expression deltas into the target landmark scale."""
+        expression_delta = driving_info["exp"] - driving_zero_info["exp"]
+        if self.cfg.infer_params.get("flag_landmark_scale_normalization", True):
+            source_scale = self._landmark_scale(source_info["kp"])
+            driving_scale = self._landmark_scale(driving_zero_info["kp"])
+            min_ratio = float(self.cfg.infer_params.get("landmark_scale_min_ratio", 0.65))
+            max_ratio = float(self.cfg.infer_params.get("landmark_scale_max_ratio", 1.35))
+            scale_ratio = np.clip(source_scale / driving_scale, min_ratio, max_ratio)
+            expression_delta = expression_delta * scale_ratio
+
+            # Bound single-landmark displacement relative to the target face.
+            # This prevents an extreme driver pose from melting the target.
+            max_fraction = float(
+                self.cfg.infer_params.get("relative_motion_max_magnitude", 0.25)
+            )
+            max_motion = source_scale * max_fraction
+            magnitude = np.linalg.norm(expression_delta, axis=-1, keepdims=True)
+            expression_delta = expression_delta * np.minimum(
+                1.0,
+                max_motion / np.maximum(magnitude, 1e-6),
+            )
+        return source_info["exp"] + expression_delta
+
+    def _get_target_canvas_tensor(self, img_src):
+        """Reuse the static target canvas on-device across realtime frames."""
+        if self.is_source_video:
+            return torch.as_tensor(img_src, device=self.device, dtype=torch.float32)
+        key = (id(img_src), img_src.shape)
+        if self._target_canvas_key != key:
+            self._target_canvas_key = key
+            self._target_canvas_tensor = torch.as_tensor(
+                img_src, device=self.device, dtype=torch.float32
+            )
+        return self._target_canvas_tensor
+
+    def _get_color_reference_tensors(self, reference_crop, output_shape):
+        """Cache target color reference and blend mask on the inference device."""
+        height, width = output_shape[:2]
+        if self.is_source_video:
+            key = None
+        else:
+            key = (id(reference_crop), height, width)
+            if self._color_reference_key == key:
+                return self._color_reference_tensors
+
+        color_reference = cv2.resize(
+            reference_crop,
+            (width, height),
+            interpolation=cv2.INTER_AREA,
+        )
+        crop_mask = cv2.resize(
+            self.mask_crop,
+            (width, height),
+            interpolation=cv2.INTER_LINEAR,
+        )
+        tensors = (
+            torch.as_tensor(color_reference, device=self.device),
+            torch.as_tensor(crop_mask, device=self.device),
+        )
+        if key is not None:
+            self._color_reference_key = key
+            self._color_reference_tensors = tensors
+        return tensors
 
     def _run(self, src_info, x_d_i_info, x_d_0_info, R_d_i, R_d_0, realtime, input_eye_ratio, input_lip_ratio,
              I_p_pstbk, **kwargs):
@@ -384,7 +466,11 @@ class FasterLivePortraitPipeline:
                 if self.is_source_video:
                     x_d_exp_smooth = self.exp_smooth.process(x_d_exp_smooth)
                 if self.cfg.infer_params.animation_region in ["all", "exp"]:
-                    if self.is_source_video:
+                    if self.cfg.infer_params.get("strict_target_identity", True):
+                        delta_new = self._map_relative_expression(
+                            x_s_info, x_d_i_info, x_d_0_info
+                        )
+                    elif self.is_source_video:
                         for idx in [1, 2, 6, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]:
                             delta_new[:, idx, :] = x_d_exp_smooth[:, idx, :]
                         delta_new[:, 3:5, 1] = x_d_exp_smooth[:, 3:5, 1]
@@ -507,15 +593,8 @@ class FasterLivePortraitPipeline:
             x_d_i_new = x_s + (x_d_i_new - x_s) * self.cfg.infer_params.driving_multiplier
             out_crop = self.model_dict["warping_spade"].predict(f_s, x_s, x_d_i_new)
             if self.cfg.infer_params.get("flag_color_match", True):
-                color_reference = cv2.resize(
-                    reference_crop,
-                    (out_crop.shape[1], out_crop.shape[0]),
-                    interpolation=cv2.INTER_AREA,
-                )
-                crop_mask = cv2.resize(
-                    self.mask_crop,
-                    (out_crop.shape[1], out_crop.shape[0]),
-                    interpolation=cv2.INTER_LINEAR,
+                color_reference, crop_mask = self._get_color_reference_tensors(
+                    reference_crop, out_crop.shape
                 )
                 out_crop = align_lab_color_tensor(out_crop, color_reference, crop_mask)
             if self.cfg.infer_params.flag_pasteback and self.cfg.infer_params.flag_do_crop and self.cfg.infer_params.flag_stitching:
@@ -526,9 +605,10 @@ class FasterLivePortraitPipeline:
         return out_crop.to(dtype=torch.uint8).cpu().numpy(), I_p_pstbk.to(dtype=torch.uint8).cpu().numpy()
 
     def run(self, image, img_src, src_info, **kwargs):
+        self._enforce_target_identity()
         img_bgr = image
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        I_p_pstbk = torch.from_numpy(img_src).to(self.device).float()
+        I_p_pstbk = self._get_target_canvas_tensor(img_src)
         realtime = kwargs.get("realtime", False)
         if self.cfg.infer_params.flag_crop_driving_video:
             if self.src_lmk_pre is None:
@@ -613,7 +693,8 @@ class FasterLivePortraitPipeline:
         return img_crop, out_crop, I_p_pstbk, dri_motion_info
 
     def run_with_pkl(self, dri_motion_info, img_src, src_info, **kwargs):
-        I_p_pstbk = torch.from_numpy(img_src).to(self.device).float()
+        self._enforce_target_identity()
+        I_p_pstbk = self._get_target_canvas_tensor(img_src)
         realtime = kwargs.get("realtime", False)
 
         input_eye_ratio = dri_motion_info[1]

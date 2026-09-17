@@ -32,12 +32,14 @@ import os
 import datetime
 import platform
 import pickle
+from collections import deque
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from colorama import Fore, Back, Style
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
+from src.utils.realtime_capture import LatestFrameCapture
 
 if platform.system().lower() == 'windows':
     FFMPEG = "third_party/ffmpeg-7.0.1-full_build/bin/ffmpeg.exe"
@@ -59,9 +61,12 @@ def run_with_video(args):
         raise ValueError("--virtual_camera requires --realtime.")
     if args.virtual_camera and not args.paste_back:
         raise ValueError("--virtual_camera requires --paste_back for a clean composited frame.")
-    if not args.dri_video or not os.path.exists(args.dri_video):
+    is_webcam = not args.dri_video or not os.path.exists(args.dri_video)
+    if is_webcam:
         # read frame from camera if no driving video input
         vcap = cv2.VideoCapture(0)
+        vcap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        vcap.set(cv2.CAP_PROP_FPS, 30)
         if not vcap.isOpened():
             print("no camera found! exit!")
             exit(1)
@@ -72,11 +77,17 @@ def run_with_video(args):
         fps = 30
     h, w = pipe.src_imgs[0].shape[:2]
     virtual_camera = None
+    realtime_capture = None
+    if args.realtime and is_webcam:
+        realtime_capture = LatestFrameCapture(vcap).start()
     if args.virtual_camera:
         try:
             virtual_camera = VirtualCameraBroadcaster(w, h, fps=30).start()
         except BaseException:
-            vcap.release()
+            if realtime_capture is not None:
+                realtime_capture.close()
+            else:
+                vcap.release()
             raise
         print(f"Virtual camera active: {w}x{h} at 30 FPS")
     save_dir = f"./results/{datetime.datetime.now().strftime('%Y-%m-%d-%H%M%S')}"
@@ -92,36 +103,48 @@ def run_with_video(args):
                                       f"{os.path.basename(args.src_image)}-{os.path.basename(args.dri_video)}-org.mp4")
         vout_org = cv2.VideoWriter(vsave_org_path, fourcc, fps, (w, h))
 
-    infer_times = []
+    infer_times = deque(maxlen=300) if args.realtime else []
     motion_lst = []
     c_eyes_lst = []
     c_lip_lst = []
 
     frame_ind = 0
     try:
-        while vcap.isOpened():
-            ret, frame = vcap.read()
+        while realtime_capture is not None or vcap.isOpened():
+            if realtime_capture is not None:
+                ret, frame = realtime_capture.read(timeout=1.0)
+                if not ret:
+                    if realtime_capture.ended:
+                        break
+                    continue
+            else:
+                ret, frame = vcap.read()
             if not ret:
                 break
             t0 = time.time()
             first_frame = frame_ind == 0
             dri_crop, out_crop, out_org, dri_motion_info = pipe.run(
-                frame, pipe.src_imgs[0], pipe.src_infos[0], first_frame=first_frame
+                frame,
+                pipe.src_imgs[0],
+                pipe.src_infos[0],
+                first_frame=first_frame,
+                realtime=args.realtime,
             )
             frame_ind += 1
             if out_crop is None:
                 print(f"no face in driving frame:{frame_ind}")
                 continue
 
-            motion_lst.append(dri_motion_info[0])
-            c_eyes_lst.append(dri_motion_info[1])
-            c_lip_lst.append(dri_motion_info[2])
+            if not args.realtime:
+                motion_lst.append(dri_motion_info[0])
+                c_eyes_lst.append(dri_motion_info[1])
+                c_lip_lst.append(dri_motion_info[2])
 
             infer_times.append(time.time() - t0)
-            dri_crop = cv2.resize(dri_crop, (512, 512))
-            out_crop = np.concatenate([dri_crop, out_crop], axis=1)
-            out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
             if not args.realtime:
+                dri_crop = cv2.resize(dri_crop, (512, 512))
+                out_crop = np.concatenate([dri_crop, out_crop], axis=1)
+                out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
                 vout_crop.write(out_crop)
                 out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
                 vout_org.write(out_org)
@@ -132,11 +155,17 @@ def run_with_video(args):
                     out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
                     cv2.imshow('Render', out_org)
                 else:
+                    dri_crop = cv2.resize(dri_crop, (512, 512))
+                    out_crop = np.concatenate([dri_crop, out_crop], axis=1)
+                    out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
                     cv2.imshow('Render', out_crop)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
     except BaseException:
-        vcap.release()
+        if realtime_capture is not None:
+            realtime_capture.close()
+        else:
+            vcap.release()
         if virtual_camera is not None:
             virtual_camera.close()
         if not args.realtime:
@@ -144,7 +173,10 @@ def run_with_video(args):
             vout_org.release()
         cv2.destroyAllWindows()
         raise
-    vcap.release()
+    if realtime_capture is not None:
+        realtime_capture.close()
+    else:
+        vcap.release()
     if virtual_camera is not None:
         virtual_camera.close()
     if not args.realtime:
@@ -177,19 +209,21 @@ def run_with_video(args):
     print(
         "inference median time: {} ms/frame, mean time: {} ms/frame".format(np.median(infer_times) * 1000,
                                                                             np.mean(infer_times) * 1000))
-    # save driving motion to pkl
-    template_dct = {
-        'n_frames': len(motion_lst),
-        'output_fps': fps,
-        'motion': motion_lst,
-        'c_eyes_lst': c_eyes_lst,
-        'c_lip_lst': c_lip_lst,
-    }
-    template_pkl_path = os.path.join(save_dir,
-                                     f"{os.path.basename(args.dri_video)}.pkl")
-    with open(template_pkl_path, "wb") as fw:
-        pickle.dump(template_dct, fw)
-    print(f"save driving motion pkl file at : {template_pkl_path}")
+    if not args.realtime:
+        # Offline renders can preserve every motion frame for later replay.
+        template_dct = {
+            'n_frames': len(motion_lst),
+            'output_fps': fps,
+            'motion': motion_lst,
+            'c_eyes_lst': c_eyes_lst,
+            'c_lip_lst': c_lip_lst,
+        }
+        template_pkl_path = os.path.join(
+            save_dir, f"{os.path.basename(args.dri_video)}.pkl"
+        )
+        with open(template_pkl_path, "wb") as fw:
+            pickle.dump(template_dct, fw)
+        print(f"save driving motion pkl file at : {template_pkl_path}")
 
 
 def run_with_pkl(args):
