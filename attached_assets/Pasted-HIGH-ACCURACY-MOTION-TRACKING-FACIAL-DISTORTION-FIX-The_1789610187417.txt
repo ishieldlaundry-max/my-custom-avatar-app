@@ -1,0 +1,28 @@
+HIGH-ACCURACY MOTION TRACKING & FACIAL DISTORTION FIX
+
+The output is experiencing facial melting/blurring when the live webcam motion is mapped to the target portrait. We need maximum motion tracking accuracy without distorting the target portrait's features.
+
+Please refactor the motion extraction and warping pipeline in Python with the following strict specifications:
+
+1. KEYPOINT SCALE NORMALIZATION & ANCHOR LOCKING:
+- Implement Relative Motion Keypoint Normalization: Extract driving keypoint deltas (movement from neutral position) rather than absolute coordinates.
+- Normalize keypoint distances by dividing motion vectors by the driver's face bounding width/height, then multiplying by the Target Portrait's face dimensions. This prevents over-warping when the driver and target have different head shapes.
+- Lock keypoint anchors for non-expressive regions (outer jawline, upper forehead, ears, and temples) so they remain strictly static to the Target Portrait.
+
+2. INSIGHTFACE / MEDIAPIPE LANDMARK ALIGNMENT & CROPPING:
+- Ensure the face detection cropper extracts 512x512 square alignment crops with identical padding (margin = 0.2) for both the webcam driver and target portrait before passing features to the implicit keypoint generator.
+- Implement optical flow smoothing or Exponential Moving Average (EMA) on webcam keypoints (e.g., smoothing factor alpha = 0.7) to eliminate jitter, sudden warping spikes, and motion blur.
+
+3. DYNAMIC RETARGETING CONTROLS:
+- Add Retargeting Multipliers to the Gradio backend configuration:
+  * Lips Retargeting Multiplier (Default: 1.0)
+  * Eye Retargeting Multiplier (Default: 1.0)
+  * Head Rotation / Pose Multiplier (Default: 0.8)
+- Allow these parameters to scale keypoint displacement down dynamically if the driver makes extreme or wide movements.
+
+4. PIPELINE SANITY CHECK:
+- Target Portrait = Visual appearance, skin tone, hair, body, and background canvas.
+- Webcam Driver = Pure normalized motion vectors (eyes, mouth, cheeks, head pose).
+- Rendered Frame = 1:1 Target Portrait animated cleanly by scaled motion deltas, routed directly to pyvirtualcam and Final Output display.
+
+Please update webui.py and the core inference pipeline to implement keypoint scale normalization, landmark EMA smoothing, and retargeting multiplier bounds.
