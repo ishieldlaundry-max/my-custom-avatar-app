@@ -1,0 +1,35 @@
+PS C:\Users\emman\FasterLivePortrait-trt> .\camera.bat --src_image "C:\path\to\your-avatar.png" --paste_back --virtual_camera
+source image: [C:\path\to\your-avatar.png]
+use animal: []
+paste_back: [--paste_back]
+virtual camera: [--virtual_camera]
+INFO:albumentations.check_version:A new version of Albumentations is available: 2.0.8 (you have 1.4.13). Upgrade using: pip install -U albumentations. To disable automatic update checks, set the environment variable NO_ALBUMENTATIONS_UPDATE to 1.
+Render,  Q > exit,  S > Stitching,  Z > RelativeMotion,  X > AnimationRegion,  C > CropDrivingVideo, KL > AdjustSourceScale, NM > AdjustDriverScale,  Space > Webcamassource,  R > SwitchRealtimeWebcamUpdate
+load Human Model >>>
+loading model: warping_spade
+{'name': 'WarpingSpadeModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/warping_spade-fix.trt'}
+loading model: motion_extractor
+{'name': 'MotionExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/motion_extractor.trt'}
+loading model: landmark
+{'name': 'LandmarkModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/landmark.trt'}
+loading model: face_analysis
+{'name': 'FaceAnalysisModel', 'predict_type': 'trt', 'model_path': ['./checkpoints/liveportrait_onnx/retinaface_det_static.trt', './checkpoints/liveportrait_onnx/face_2dpose_106_static.trt']}
+loading model: app_feat_extractor
+{'name': 'AppearanceFeatureExtractorModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/appearance_feature_extractor.trt'}
+trt
+loading model: stitching
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching.trt'}
+loading model: stitching_eye_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_eye.trt'}
+loading model: stitching_lip_retarget
+{'name': 'StitchingModel', 'predict_type': 'trt', 'model_path': './checkpoints/liveportrait_onnx/stitching_lip.trt'}
+process source:C:\path\to\your-avatar.png >>>>>>>>
+  0%|                                                                                                               | 0/1 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "C:\Users\emman\FasterLivePortrait-trt\src\pipelines\faster_live_portrait_pipeline.py", line 163, in prepare_source
+    img_bgr = resize_to_limit(img_bgr, self.cfg.infer_params.source_max_dim,
+  File "C:\Users\emman\FasterLivePortrait-trt\src\utils\utils.py", line 56, in resize_to_limit
+    h, w = img.shape[:2]
+AttributeError: 'NoneType' object has no attribute 'shape'
+no face in C:\path\to\your-avatar.png! exit!
+PS C:\Users\emman\FasterLivePortrait-trt>
