@@ -1,0 +1,31 @@
+PS C:\Users\emman\FasterLivePortrait-trt> $proxyNames = @(
+>>   "HTTP_PROXY",
+>>   "HTTPS_PROXY",
+>>   "ALL_PROXY",
+>>   "http_proxy",
+>>   "https_proxy",
+>>   "all_proxy"
+>> )
+>>
+>> foreach ($name in $proxyNames) {
+>>   Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+>> }
+>>
+>> $trtPython = "C:\Users\emman\FasterLivePortrait-trt\venv\python.exe"
+>>
+>> & $trtPython -m pip --isolated install `
+>>   --index-url https://pypi.org/simple `
+>>   pyvirtualcam
+Looking in indexes: https://pypi.org/simple, https://pypi.ngc.nvidia.com
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57890E50>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /simple/pyvirtualcam/
+WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57890FA0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /simple/pyvirtualcam/
+WARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891090>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /simple/pyvirtualcam/
+WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891180>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /simple/pyvirtualcam/
+WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891300>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /simple/pyvirtualcam/
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF578918D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /pyvirtualcam/
+WARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF578919C0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /pyvirtualcam/
+WARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891AE0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /pyvirtualcam/
+WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891BA0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /pyvirtualcam/
+WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x000001FF57891CC0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))': /pyvirtualcam/
+ERROR: Could not find a version that satisfies the requirement pyvirtualcam (from versions: none)
+ERROR: No matching distribution found for pyvirtualcam
