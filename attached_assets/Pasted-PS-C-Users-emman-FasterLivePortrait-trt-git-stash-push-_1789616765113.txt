@@ -1,0 +1,72 @@
+PS C:\Users\emman\FasterLivePortrait-trt> git stash push --include-untracked -m "Alienware local changes before custom repository sync"
+warning: in the working copy of 'src/utils/color_alignment.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/virtual_camera.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'webui.py.before-source-selection-fix.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'camera.bat', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'configs/onnx_infer.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'configs/trt_infer.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'requirements.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'requirements_win.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'run.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pipelines/faster_live_portrait_pipeline.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pipelines/gradio_live_portrait_pipeline.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/crop.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'webui.py', LF will be replaced by CRLF the next time Git touches it
+Saved working directory and index state On master: Alienware local changes before custom repository sync
+PS C:\Users\emman\FasterLivePortrait-trt> git status --shortgit status --short
+error: unknown option `shortgit'
+usage: git status [<options>] [--] [<pathspec>...]
+
+    -v, --[no-]verbose    be verbose
+    -s, --[no-]short      show status concisely
+    -b, --[no-]branch     show branch information
+    --[no-]show-stash     show stash information
+    --[no-]ahead-behind   compute full ahead/behind values
+    --[no-]porcelain[=<version>]
+                          machine-readable output
+    --[no-]long           show status in long format (default)
+    -z, --[no-]null       terminate entries with NUL
+    -u, --[no-]untracked-files[=<mode>]
+                          show untracked files, optional modes: all, normal, no. (Default: all)
+    --[no-]ignored[=<mode>]
+                          show ignored files, optional modes: traditional, matching, no. (Default: traditional)
+    --[no-]ignore-submodules[=<when>]
+                          ignore changes to submodules, optional when: all, dirty, untracked. (Default: all)
+    --[no-]column[=<style>]
+                          list untracked files in columns
+    --no-renames          do not detect renames
+    --renames             opposite of --no-renames
+    -M, --find-renames[=<n>]
+                          detect renames, optionally set similarity index
+
+PS C:\Users\emman\FasterLivePortrait-trt> git remote rename origin upstream
+>> git remote add origin https://github.com/ishieldlaundry-max/my-custom-avatar-app.git
+>> git fetch origin
+remote: Enumerating objects: 534, done.
+remote: Counting objects: 100% (534/534), done.
+remote: Compressing objects: 100% (326/326), done.
+remote: Total 534 (delta 236), reused 481 (delta 197), pack-reused 0 (from 0)
+Receiving objects: 100% (534/534), 34.80 MiB | 643.00 KiB/s, done.
+Resolving deltas: 100% (236/236), done.
+From https://github.com/ishieldlaundry-max/my-custom-avatar-app
+ * [new branch]      main       -> origin/main
+Enumerating objects: 1171, done.
+Counting objects: 100% (1171/1171), done.
+Delta compression using up to 32 threads
+Compressing objects: 100% (531/531), done.
+Writing objects: 100% (1171/1171), done.
+Total 1171 (delta 647), reused 1111 (delta 600), pack-reused 0 (from 0)
+PS C:\Users\emman\FasterLivePortrait-trt> git switch -c main --track origin/main
+branch 'main' set up to track 'origin/main'.
+Switched to a new branch 'main'
+PS C:\Users\emman\FasterLivePortrait-trt> git status -sb
+## main...origin/main
+?? third_party/
+PS C:\Users\emman\FasterLivePortrait-trt> git log -1 --oneline
+75f3c1b (HEAD -> main, origin/main, origin/HEAD) Update GitHub sync history log
+PS C:\Users\emman\FasterLivePortrait-trt> git remote -v
+origin  https://github.com/ishieldlaundry-max/my-custom-avatar-app.git (fetch)
+origin  https://github.com/ishieldlaundry-max/my-custom-avatar-app.git (push)
+upstream        https://github.com/warmshao/FasterLivePortrait.git (fetch)
+upstream        https://github.com/warmshao/FasterLivePortrait.git (push)
+PS C:\Users\emman\FasterLivePortrait-trt>
