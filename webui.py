@@ -7,12 +7,20 @@ import os
 import pdb
 import inspect
 import importlib.util
+import time
+from pathlib import Path
 
 import gradio as gr
 import os.path as osp
 from omegaconf import OmegaConf
 
 from src.pipelines.gradio_live_portrait_pipeline import GradioLivePortraitPipeline
+from src.pipelines.full_body_animation_pipeline import (
+    FullBodyAnimationError,
+    FullBodyAnimationPipeline,
+    FullBodyRenderOptions,
+    inspect_full_body_inputs,
+)
 
 
 def load_description(fp):
@@ -151,6 +159,60 @@ def gpu_wrapped_execute_video(source_image, source_video, webcam_enabled, webcam
 
 def gpu_wrapped_execute_image(*args, **kwargs):
     return gradio_pipeline.execute_image(*args, **kwargs)
+
+
+def execute_full_body_animation(
+    source_image,
+    driving_video,
+    resolution=512,
+    chunk_size=16,
+    frames_overlap=4,
+    num_inference_steps=15,
+    fps=15,
+    seed=42,
+    confirm_full_body_framing=False,
+):
+    """Render the target-owned full body through the isolated MimicMotion backend."""
+    if not source_image:
+        raise gr.Error("Upload a full-body target image first.", duration=6)
+    if not driving_video:
+        raise gr.Error(
+            "Record or upload a webcam pose video first. Full-body mode renders offline.",
+            duration=6,
+        )
+    input_report = inspect_full_body_inputs(source_image, driving_video)
+    if not confirm_full_body_framing:
+        raise gr.Error(
+            "Review the full-body input check, confirm the target shows the "
+            "head, full body, and both hands, then render again. "
+            + " ".join(input_report.warnings),
+            duration=12,
+        )
+    try:
+        options = FullBodyRenderOptions(
+            resolution=int(resolution),
+            chunk_size=int(chunk_size),
+            frames_overlap=int(frames_overlap),
+            num_inference_steps=int(num_inference_steps),
+            fps=int(fps),
+            seed=int(seed),
+        )
+        output = FullBodyAnimationPipeline().render(
+            source_image,
+            driving_video,
+            Path("results") / "full_body",
+            options,
+        )
+    except FullBodyAnimationError as exc:
+        raise gr.Error(str(exc), duration=12) from exc
+    except (OSError, ValueError) as exc:
+        raise gr.Error(f"Full-body render could not start: {exc}", duration=10) from exc
+    return str(output), f"Completed full-body render: `{output}`"
+
+
+def validate_full_body_inputs(source_image, driving_video):
+    """Return the preflight report without starting generation."""
+    return inspect_full_body_inputs(source_image, driving_video).to_markdown()
 
 
 def change_animal_model(is_animal):
@@ -975,6 +1037,76 @@ with gr.Blocks(
                 visible=False,
             )
 
+    with gr.Accordion("Offline full-body animation", open=False):
+        gr.Markdown(
+            "Use a **full-body target image** and a recorded webcam pose video. "
+            "This mode keeps the target's body, hands, clothing, and skin as the "
+            "appearance source, then renders offline through DWPose + MimicMotion. "
+            "It is separate from the realtime face pipeline and requires the "
+            "optional Windows backend."
+        )
+        with gr.Row():
+            full_body_source_image = gr.Image(
+                type="filepath",
+                label="Full-body target avatar",
+            )
+            full_body_driving_video = gr.Video(
+                sources=["upload", "webcam"],
+                label="Recorded webcam pose",
+            )
+        with gr.Row():
+            full_body_check_button = gr.Button(
+                "CHECK FRAMING & DURATION",
+                variant="secondary",
+            )
+            full_body_validation_status = gr.Markdown(
+                "Run the input check before starting the GPU render.",
+            )
+        full_body_confirm_framing = gr.Checkbox(
+            label=(
+                "I confirm the target shows the head, full body, and both hands, "
+                "and I reviewed any warnings above."
+            ),
+            value=False,
+        )
+        with gr.Row():
+            full_body_resolution = gr.Dropdown(
+                choices=[512, 576],
+                value=512,
+                label="Resolution",
+                info="Use 512 for an 8 GB RTX 4070.",
+            )
+            full_body_chunk_size = gr.Number(
+                value=16,
+                label="Temporal chunk size",
+                precision=0,
+                interactive=False,
+            )
+            full_body_overlap = gr.Number(
+                value=4,
+                label="Frame overlap",
+                precision=0,
+            )
+            full_body_steps = gr.Number(
+                value=15,
+                label="Denoising steps",
+                precision=0,
+            )
+        with gr.Row():
+            full_body_fps = gr.Number(value=15, label="Output FPS", precision=0)
+            full_body_seed = gr.Number(value=42, label="Seed", precision=0)
+        full_body_render_button = gr.Button(
+            "RENDER FULL-BODY AVATAR",
+            variant="primary",
+        )
+        full_body_output = gr.Video(
+            label="Full-body target-owned output",
+            autoplay=False,
+        )
+        full_body_status = gr.Markdown(
+            "Backend not started. Run `setup_full_body_windows.bat` on the Alienware.",
+        )
+
     with gr.Accordion("Retargeting lab", open=False):
         gr.Markdown("Fine-tune eye and lip openness against a target portrait.")
         with gr.Row():
@@ -1066,6 +1198,28 @@ with gr.Blocks(
             output_image_concat_i2i,
         ],
         show_progress=True,
+    )
+    full_body_render_button.click(
+        fn=execute_full_body_animation,
+        inputs=[
+            full_body_source_image,
+            full_body_driving_video,
+            full_body_resolution,
+            full_body_chunk_size,
+            full_body_overlap,
+            full_body_steps,
+            full_body_fps,
+            full_body_seed,
+            full_body_confirm_framing,
+        ],
+        outputs=[full_body_output, full_body_status],
+        show_progress=True,
+    )
+    full_body_check_button.click(
+        fn=validate_full_body_inputs,
+        inputs=[full_body_source_image, full_body_driving_video],
+        outputs=[full_body_validation_status],
+        show_progress=False,
     )
 
 
