@@ -13,6 +13,7 @@ the appearance source; the webcam recording supplies pose.
 - A short recorded webcam video with one person and a clear full-body pose
 - Approximately 8 GB VRAM minimum for the 16-frame preset
 - Disk space for the MimicMotion checkpoint and Stable Video Diffusion base model
+- Hugging Face access to `stabilityai/stable-video-diffusion-img2vid-xt-1-1`
 
 The 8 GB preset is deliberately offline and slow. The normal face mode and
 virtual-camera mode are unchanged.
@@ -28,7 +29,15 @@ setup_full_body_windows.bat
 This creates `third_party\MimicMotion\.venv`, downloads DWPose and the
 MimicMotion checkpoint, and leaves the existing FasterLivePortrait environment
 untouched. The Stable Video Diffusion base model downloads from Hugging Face on
-the first render.
+the first render. It is gated, so accept its access terms while signed in at
+the model page, then authenticate the isolated environment locally:
+
+```bat
+third_party\MimicMotion\.venv\Scripts\huggingface-cli.exe login
+```
+
+Enter the Hugging Face token only into that local prompt; do not paste it into
+chat or commit it to the project.
 
 ## Render a full-body avatar
 
