@@ -21,7 +21,7 @@ if not exist "%ROOT%\.venv\Scripts\python.exe" (
 call "%ROOT%\.venv\Scripts\activate.bat"
 python -m pip install --upgrade pip
 python -m pip install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu117
-python -m pip install diffusers==0.27.0 transformers==4.32.1 huggingface_hub==0.25.2 numpy==1.26.4 decord einops omegaconf onnxruntime-gpu
+python -m pip install diffusers==0.27.0 transformers==4.32.1 huggingface_hub==0.25.2 numpy==1.26.4 matplotlib decord einops omegaconf onnxruntime-gpu
 
 if not exist "%ROOT%\models\DWPose" mkdir "%ROOT%\models\DWPose"
 if not exist "%ROOT%\models\DWPose\yolox_l.onnx" (
