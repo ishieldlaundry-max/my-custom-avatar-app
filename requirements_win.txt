@@ -5,6 +5,7 @@ numpy
 opencv-python
 gradio
 scikit-image
+Pillow
 insightface
 huggingface_hub[cli]
 mediapipe
