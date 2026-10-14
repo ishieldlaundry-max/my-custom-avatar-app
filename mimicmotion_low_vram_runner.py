@@ -49,7 +49,15 @@ def main() -> None:
     config = OmegaConf.load(args.inference_config)
     pipeline = create_pipeline(config, device)
     if os.environ.get("MIMICMOTION_CPU_OFFLOAD", "1") != "0":
-        pipeline.enable_model_cpu_offload()
+        # Upstream MimicMotion constructs the DiffusionPipeline without moving
+        # it to a device. Some Diffusers/MimicMotion combinations expose no
+        # `device` property on that pipeline, although
+        # enable_model_cpu_offload() reads it before installing its hooks.
+        # Components returned by create_pipeline are CPU-resident, so provide
+        # the accurate initial state for Diffusers' offload check.
+        if not hasattr(pipeline, "device"):
+            pipeline.device = torch.device("cpu")
+        pipeline.enable_model_cpu_offload(device=device)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
