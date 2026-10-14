@@ -49,15 +49,29 @@ def main() -> None:
     config = OmegaConf.load(args.inference_config)
     pipeline = create_pipeline(config, device)
     if os.environ.get("MIMICMOTION_CPU_OFFLOAD", "1") != "0":
-        # Upstream MimicMotion constructs the DiffusionPipeline without moving
-        # it to a device. Some Diffusers/MimicMotion combinations expose no
-        # `device` property on that pipeline, although
-        # enable_model_cpu_offload() reads it before installing its hooks.
-        # Components returned by create_pipeline are CPU-resident, so provide
-        # the accurate initial state for Diffusers' offload check.
-        if not hasattr(pipeline, "device"):
-            pipeline.device = torch.device("cpu")
-        pipeline.enable_model_cpu_offload(device=device)
+        # Diffusers' offload setup reads pipeline.device. With the pinned
+        # MimicMotion stack, that property can raise AttributeError while
+        # inspecting the not-yet-hooked components, and it is read-only.
+        try:
+            pipeline.device
+        except AttributeError:
+            pipeline_type = type(pipeline)
+            device_property = getattr(pipeline_type, "device", None)
+            if not isinstance(device_property, property) or device_property.fset:
+                raise
+            local_device_property = vars(pipeline_type).get("device")
+            # create_pipeline leaves components CPU-resident. Temporarily
+            # report that accurate state so offload can install CUDA hooks.
+            pipeline_type.device = property(lambda _pipeline: torch.device("cpu"))
+            try:
+                pipeline.enable_model_cpu_offload(device=device)
+            finally:
+                if local_device_property is None:
+                    del pipeline_type.device
+                else:
+                    pipeline_type.device = local_device_property
+        else:
+            pipeline.enable_model_cpu_offload(device=device)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
