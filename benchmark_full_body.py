@@ -69,6 +69,9 @@ def main() -> int:
     parser.add_argument("--source-image", required=True, type=Path)
     parser.add_argument("--driving-video", required=True, type=Path)
     parser.add_argument("--output-dir", default="results/full_body_benchmark", type=Path)
+    parser.add_argument(
+        "--resolution", default=512, type=int, choices=(384, 512, 576)
+    )
     parser.add_argument("--sample-seconds", default=1.0, type=float)
     args = parser.parse_args()
 
@@ -82,6 +85,8 @@ def main() -> int:
         str(args.driving_video),
         "--output-dir",
         str(args.output_dir),
+        "--resolution",
+        str(args.resolution),
     ]
     started = time.monotonic()
     started_epoch = time.time()
