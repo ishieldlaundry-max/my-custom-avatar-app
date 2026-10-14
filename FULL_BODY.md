@@ -70,6 +70,10 @@ small runner that enables Diffusers sequential CPU model offload before
 inference, so the VAE and other components do not all remain resident on the
 8 GB GPU.
 
+If a 512 px render runs out of GPU memory, retry at 384 px while keeping the
+other settings unchanged. The benchmark accepts `--resolution 384`; the
+default remains 512 px.
+
 Before generation, the UI's **CHECK FRAMING & DURATION** action checks the
 target dimensions/aspect ratio and reads the driver duration. It warns about
 landscape or unusually cropped-looking framing, low-resolution targets, clips
