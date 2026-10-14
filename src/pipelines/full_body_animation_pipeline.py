@@ -36,8 +36,8 @@ class FullBodyRenderOptions:
     seed: int = 42
 
     def validate(self) -> None:
-        if self.resolution not in (512, 576):
-            raise ValueError("Full-body resolution must be 512 or 576.")
+        if self.resolution not in (384, 512, 576):
+            raise ValueError("Full-body resolution must be 384, 512, or 576.")
         if self.chunk_size != 16:
             raise ValueError("The 8 GB preset requires a 16-frame chunk size.")
         if not 0 <= self.frames_overlap < self.chunk_size:
