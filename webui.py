@@ -1071,10 +1071,10 @@ with gr.Blocks(
         )
         with gr.Row():
             full_body_resolution = gr.Dropdown(
-                choices=[512, 576],
+                choices=[384, 512, 576],
                 value=512,
                 label="Resolution",
-                info="Use 512 for an 8 GB RTX 4070.",
+                info="384 uses less VRAM; 512 is the 8 GB default.",
             )
             full_body_chunk_size = gr.Number(
                 value=16,
