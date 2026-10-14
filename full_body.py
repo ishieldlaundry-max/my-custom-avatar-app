@@ -16,7 +16,7 @@ def main() -> None:
     parser.add_argument("--source-image", required=True, type=Path)
     parser.add_argument("--driving-video", required=True, type=Path)
     parser.add_argument("--output-dir", default="results/full_body", type=Path)
-    parser.add_argument("--resolution", default=512, type=int, choices=(512, 576))
+    parser.add_argument("--resolution", default=512, type=int, choices=(384, 512, 576))
     parser.add_argument("--steps", default=15, type=int)
     parser.add_argument("--fps", default=15, type=int)
     parser.add_argument("--seed", default=42, type=int)
