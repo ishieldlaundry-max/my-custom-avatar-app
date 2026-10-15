@@ -1048,6 +1048,18 @@ with gr.Blocks(
                 visible=False,
             )
 
+    with gr.Accordion("Live 3D avatar (prototype)", open=False):
+        gr.Markdown(
+            "Load a humanoid VRM and animate its face and limbs from the webcam. "
+            "Camera frames stay in the browser. The tracker and avatar libraries "
+            "are downloaded from their public CDNs on first use."
+        )
+        gr.HTML(
+            '<iframe title="Live 3D avatar" src="/gradio_api/file=assets/live_avatar.html" '
+            'style="display:block;width:100%;height:760px;border:0;border-radius:14px;" '
+            'allow="camera; fullscreen" loading="lazy"></iframe>'
+        )
+
     with gr.Accordion("Offline full-body animation", open=False):
         gr.Markdown(
             "Use a **full-body target image** and a recorded webcam pose video. "
@@ -1251,4 +1263,5 @@ if __name__ == '__main__':
         server_port=args.port,
         share=False,
         server_name=args.host_ip,
+        allowed_paths=["assets"],
     )
