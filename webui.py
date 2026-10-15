@@ -16,6 +16,7 @@ from omegaconf import OmegaConf
 
 from src.pipelines.gradio_live_portrait_pipeline import GradioLivePortraitPipeline
 from src.pipelines.full_body_animation_pipeline import (
+    FullBodyAnimationCancelled,
     FullBodyAnimationError,
     FullBodyAnimationPipeline,
     FullBodyRenderOptions,
@@ -67,6 +68,7 @@ else:
     cfg_path = "configs/trt_mp_infer.yaml" if args.use_mp else "configs/trt_infer.yaml"
 infer_cfg = OmegaConf.load(cfg_path)
 gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
+full_body_pipeline = FullBodyAnimationPipeline()
 
 
 VIDEO_PIPELINE_ARGUMENT_NAMES = (
@@ -197,17 +199,26 @@ def execute_full_body_animation(
             fps=int(fps),
             seed=int(seed),
         )
-        output = FullBodyAnimationPipeline().render(
+        output = full_body_pipeline.render(
             source_image,
             driving_video,
             Path("results") / "full_body",
             options,
         )
+    except FullBodyAnimationCancelled as exc:
+        return gr.update(), f"**Render cancelled.** {exc}"
     except FullBodyAnimationError as exc:
         raise gr.Error(str(exc), duration=12) from exc
     except (OSError, ValueError) as exc:
         raise gr.Error(f"Full-body render could not start: {exc}", duration=10) from exc
     return str(output), f"Completed full-body render: `{output}`"
+
+
+def cancel_full_body_animation():
+    """Cancel only the offline full-body child process."""
+    if full_body_pipeline.cancel_active_render():
+        return gr.update(), "Cancellation requested. Stopping MimicMotion…"
+    return gr.update(), "No full-body render is currently running."
 
 
 def validate_full_body_inputs(source_image, driving_video):
@@ -1095,10 +1106,15 @@ with gr.Blocks(
         with gr.Row():
             full_body_fps = gr.Number(value=15, label="Output FPS", precision=0)
             full_body_seed = gr.Number(value=42, label="Seed", precision=0)
-        full_body_render_button = gr.Button(
-            "RENDER FULL-BODY AVATAR",
-            variant="primary",
-        )
+        with gr.Row():
+            full_body_render_button = gr.Button(
+                "RENDER FULL-BODY AVATAR",
+                variant="primary",
+            )
+            full_body_cancel_button = gr.Button(
+                "CANCEL RENDER",
+                variant="stop",
+            )
         full_body_output = gr.Video(
             label="Full-body target-owned output",
             autoplay=False,
@@ -1214,6 +1230,13 @@ with gr.Blocks(
         ],
         outputs=[full_body_output, full_body_status],
         show_progress=True,
+    )
+    full_body_cancel_button.click(
+        fn=cancel_full_body_animation,
+        inputs=[],
+        outputs=[full_body_output, full_body_status],
+        show_progress=False,
+        queue=False,
     )
     full_body_check_button.click(
         fn=validate_full_body_inputs,
