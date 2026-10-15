@@ -62,7 +62,7 @@
         <button id="start" disabled>Start webcam tracking</button>
         <button id="stop" disabled>Stop webcam</button>
         <div id="detail">Load a humanoid VRM model. The first model request and tracking models require an internet connection.</div>
-        <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and hand landmarks. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
+        <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
         <div class="metric"><span>Render rate</span><span id="fps">—</span></div>
@@ -110,6 +110,12 @@
       bone.rotation[axis] += (value - bone.rotation[axis]) * amount;
     };
     const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+    const angle2D = (a, b) => Math.atan2(-(b.y - a.y), b.x - a.x);
+    const normalizeAngle = (angle) => {
+      while (angle > Math.PI) angle -= Math.PI * 2;
+      while (angle < -Math.PI) angle += Math.PI * 2;
+      return angle;
+    };
     const getBone = (name) => vrm?.humanoid?.getNormalizedBoneNode(name) || null;
 
     function resize() {
@@ -238,11 +244,10 @@
     function applyPose(landmarks) {
       if (!vrm || !landmarks?.length) return;
       const p = landmarks;
-      const angle = (a, b) => Math.atan2(-(b.y - a.y), b.x - a.x);
       const setLimb = (name, a, b, restAngle) => {
         const bone = getBone(name);
         if (bone && p[a]?.visibility > 0.25 && p[b]?.visibility > 0.25) {
-          smooth(bone, "z", clamp(angle(p[a], p[b]) - restAngle, -1.8, 1.8));
+          smooth(bone, "z", clamp(angle2D(p[a], p[b]) - restAngle, -1.8, 1.8));
         }
       };
       // Use stable landmark segments for a conservative first-pass body retarget.
@@ -254,31 +259,60 @@
       setLimb(boneNames.rightLowerLeg, 26, 28, -Math.PI / 2);
       setLimb(boneNames.leftUpperLeg, 23, 25, -Math.PI / 2);
       setLimb(boneNames.leftLowerLeg, 25, 27, -Math.PI / 2);
-      const shoulders = p[11] && p[12] ? angle(p[11], p[12]) : 0;
+      const shoulders = p[11] && p[12] ? angle2D(p[11], p[12]) : 0;
       const chest = getBone(boneNames.chest) || getBone(boneNames.spine);
       smooth(chest, "z", clamp(-shoulders, -0.45, 0.45));
       trackingEl.textContent = "BODY";
     }
 
-    function applyHands(result) {
+    function applyHands(result, poseLandmarks) {
       const hands = result?.landmarks || [];
       const sides = result?.handedness || [];
+      const pose = poseLandmarks || [];
       const fingerChains = [
-        { points: [1, 2, 3, 4], bones: [boneNames.leftThumbProximal, boneNames.leftThumbDistal] },
-        { points: [0, 5, 6, 7, 8], bones: [boneNames.leftIndexProximal, boneNames.leftIndexIntermediate, boneNames.leftIndexDistal] },
-        { points: [0, 9, 10, 11, 12], bones: [boneNames.leftMiddleProximal, boneNames.leftMiddleIntermediate, boneNames.leftMiddleDistal] },
-        { points: [0, 13, 14, 15, 16], bones: [boneNames.leftRingProximal, boneNames.leftRingIntermediate, boneNames.leftRingDistal] },
-        { points: [0, 17, 18, 19, 20], bones: [boneNames.leftLittleProximal, boneNames.leftLittleIntermediate, boneNames.leftLittleDistal] }
+        { finger: "Thumb", points: [1, 2, 3, 4], joints: ["Proximal", "Distal"] },
+        { finger: "Index", points: [0, 5, 6, 7, 8], joints: ["Proximal", "Intermediate", "Distal"] },
+        { finger: "Middle", points: [0, 9, 10, 11, 12], joints: ["Proximal", "Intermediate", "Distal"] },
+        { finger: "Ring", points: [0, 13, 14, 15, 16], joints: ["Proximal", "Intermediate", "Distal"] },
+        { finger: "Little", points: [0, 17, 18, 19, 20], joints: ["Proximal", "Intermediate", "Distal"] }
       ];
+      let trackedHands = 0;
       for (let handIndex = 0; handIndex < hands.length; handIndex++) {
         const landmarks = hands[handIndex];
-        const side = sides[handIndex]?.[0]?.categoryName || "Left";
-        const isRight = side.toLowerCase() === "right";
+        if (!Array.isArray(landmarks) || landmarks.length < 21) continue;
+        const detectedSide = sides[handIndex]?.[0]?.categoryName?.toLowerCase();
+        if (detectedSide !== "left" && detectedSide !== "right") continue;
+        // MediaPipe handedness assumes mirrored selfie input; this video stream
+        // is unmirrored (only the on-screen camera preview is flipped).
+        const side = detectedSide === "left" ? "right" : "left";
+        const isRight = side === "right";
+        const sideName = isRight ? "right" : "left";
+        const sideSign = isRight ? -1 : 1;
+        const wrist = landmarks[0];
+        const middleMcp = landmarks[9];
+        const wristBone = getBone(isRight ? boneNames.rightHand : boneNames.leftHand);
+        const elbowIndex = isRight ? 14 : 13;
+        const wristPoseIndex = isRight ? 16 : 15;
+        const elbow = pose[elbowIndex];
+        const poseWrist = pose[wristPoseIndex];
+        if (
+          wristBone &&
+          wrist &&
+          middleMcp &&
+          Number.isFinite(wrist.x) &&
+          Number.isFinite(middleMcp.x) &&
+          elbow?.visibility > 0.25 &&
+          poseWrist?.visibility > 0.25
+        ) {
+          const palmAngle = angle2D(wrist, middleMcp);
+          const forearmAngle = angle2D(elbow, poseWrist);
+          const wristBend = normalizeAngle(palmAngle - forearmAngle);
+          smooth(wristBone, "z", clamp(sideSign * wristBend, -1.05, 1.05), 0.22);
+        }
         for (const chain of fingerChains) {
-          const bones = chain.bones.map((name) => {
-            if (!name) return null;
-            return getBone(isRight ? name.replace("left", "right") : name);
-          });
+          const bones = chain.joints.map((joint) =>
+            getBone(boneNames[`${sideName}${chain.finger}${joint}`])
+          );
           for (let joint = 0; joint < bones.length; joint++) {
             const a = landmarks[chain.points[joint]];
             const b = landmarks[chain.points[joint + 1]];
@@ -288,14 +322,16 @@
             const v2 = { x: c.x - b.x, y: c.y - b.y };
             const dot = v1.x * v2.x + v1.y * v2.y;
             const mag = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
-            if (mag < 1e-5) continue;
+            if (!Number.isFinite(mag) || mag < 1e-5) continue;
             const bend = Math.acos(clamp(dot / mag, -1, 1));
-            const direction = isRight ? -1 : 1;
-            smooth(bones[joint], "x", clamp(direction * bend * 0.8, -1.3, 1.3), 0.35);
+            smooth(bones[joint], "x", clamp(sideSign * bend * 0.8, -1.3, 1.3), 0.28);
           }
         }
+        trackedHands++;
       }
-      if (hands.length) trackingEl.textContent = "FACE + BODY + HANDS";
+      if (trackedHands) {
+        trackingEl.textContent = `FACE + BODY + ${trackedHands} HAND${trackedHands === 1 ? "" : "S"}`;
+      }
     }
 
     function applyFace(result) {
@@ -330,7 +366,7 @@
         const hands = handLandmarker?.detectForVideo(video, now);
         applyPose(pose?.landmarks?.[0]);
         applyFace(face);
-        applyHands(hands);
+        applyHands(hands, pose?.landmarks?.[0]);
       }
       requestAnimationFrame(trackFrame);
     }
