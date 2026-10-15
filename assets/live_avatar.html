@@ -47,7 +47,7 @@
 <body>
   <section class="shell">
     <header class="top">
-      <div><h2>Live 3D Avatar</h2><div class="sub">Browser-side webcam tracking → VRM humanoid</div></div>
+  <div><h2>Live 3D Avatar</h2><div class="sub">Browser-side webcam tracking → VRM or locally rigged GLB</div></div>
       <div class="status" id="status">Avatar not loaded</div>
     </header>
     <div class="layout">
@@ -61,7 +61,7 @@
         <input id="model-file" type="file" accept=".vrm,.glb">
         <button id="start" disabled>Start webcam tracking</button>
         <button id="stop" disabled>Stop webcam</button>
-        <div id="detail">Load a humanoid VRM model. The first model request and tracking models require an internet connection.</div>
+        <div id="detail">Load a humanoid VRM or a Blender-rigged GLB. The first model request and tracking models require an internet connection.</div>
         <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
@@ -102,9 +102,40 @@
     key.position.set(-2, 4, 4); scene.add(key);
     const fill = new THREE.DirectionalLight(0x74dcff, 1.1);
     fill.position.set(3, 2, -2); scene.add(fill);
-    let vrm = null, stream = null, poseLandmarker = null, faceLandmarker = null, handLandmarker = null;
+    let vrm = null, avatarRoot = null, genericRoot = null;
+    let stream = null, poseLandmarker = null, faceLandmarker = null, handLandmarker = null;
     let lastVideoTime = -1, frames = 0, fpsStart = performance.now();
     const boneNames = VRMHumanBoneName;
+    const genericBoneNames = {
+      [boneNames.hips]: "Hips",
+      [boneNames.spine]: "Spine",
+      [boneNames.chest]: "Chest",
+      [boneNames.neck]: "Neck",
+      [boneNames.head]: "Head",
+      [boneNames.leftUpperArm]: "LeftUpperArm",
+      [boneNames.leftLowerArm]: "LeftLowerArm",
+      [boneNames.leftHand]: "LeftHand",
+      [boneNames.rightUpperArm]: "RightUpperArm",
+      [boneNames.rightLowerArm]: "RightLowerArm",
+      [boneNames.rightHand]: "RightHand",
+      [boneNames.leftUpperLeg]: "LeftUpperLeg",
+      [boneNames.leftLowerLeg]: "LeftLowerLeg",
+      [boneNames.leftFoot]: "LeftFoot",
+      [boneNames.rightUpperLeg]: "RightUpperLeg",
+      [boneNames.rightLowerLeg]: "RightLowerLeg",
+      [boneNames.rightFoot]: "RightFoot",
+      ...Object.fromEntries(
+        ["left", "right"].flatMap((side) =>
+          ["Thumb", "Index", "Middle", "Ring", "Little"].flatMap((finger) =>
+            (finger === "Thumb" ? ["Proximal", "Distal"] : ["Proximal", "Intermediate", "Distal"])
+              .map((joint) => [
+                boneNames[`${side}${finger}${joint}`],
+                `${side === "left" ? "Left" : "Right"}${finger}${joint}`
+              ])
+          )
+        )
+      )
+    };
     const smooth = (bone, axis, value, amount = 0.28) => {
       if (!bone || !Number.isFinite(value)) return;
       bone.rotation[axis] += (value - bone.rotation[axis]) * amount;
@@ -116,7 +147,11 @@
       while (angle < -Math.PI) angle += Math.PI * 2;
       return angle;
     };
-    const getBone = (name) => vrm?.humanoid?.getNormalizedBoneNode(name) || null;
+    const getBone = (name) => {
+      if (vrm) return vrm.humanoid?.getNormalizedBoneNode(name) || null;
+      const genericName = genericBoneNames[name];
+      return genericName ? genericRoot?.getObjectByName(genericName) || null : null;
+    };
 
     function resize() {
       const w = Math.max(1, sceneCanvas.clientWidth), h = Math.max(1, sceneCanvas.clientHeight);
@@ -126,13 +161,13 @@
     new ResizeObserver(resize).observe($("stage"));
 
     function fitAvatar() {
-      if (!vrm) return;
-      const box = new THREE.Box3().setFromObject(vrm.scene);
+      if (!avatarRoot) return;
+      const box = new THREE.Box3().setFromObject(avatarRoot);
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
-      vrm.scene.position.x -= center.x;
-      vrm.scene.position.y -= box.min.y;
-      vrm.scene.position.z -= center.z;
+      avatarRoot.position.x -= center.x;
+      avatarRoot.position.y -= box.min.y;
+      avatarRoot.position.z -= center.z;
       const height = Math.max(size.y, 1);
       camera3d.position.set(0, height * 0.57, height * 2.3);
       camera3d.lookAt(0, height * 0.5, 0);
@@ -145,15 +180,34 @@
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
       const gltf = await loader.loadAsync(url);
-      if (!gltf.userData.vrm) throw new Error("This file loaded as glTF but has no VRM humanoid metadata.");
-      if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
-      vrm = gltf.userData.vrm;
-      VRMUtils.rotateVRM0(vrm);
-      scene.add(vrm.scene);
+      const loadedVrm = gltf.userData.vrm || null;
+      const loadedRoot = loadedVrm?.scene || gltf.scene;
+      const requiredBones = Object.values(genericBoneNames).filter((name) =>
+        ["Hips", "Spine", "Chest", "Neck", "Head", "LeftUpperArm", "LeftLowerArm",
+          "RightUpperArm", "RightLowerArm", "LeftUpperLeg", "LeftLowerLeg",
+          "RightUpperLeg", "RightLowerLeg"].includes(name)
+      );
+      if (!loadedVrm) {
+        const missing = requiredBones.filter((name) => !loadedRoot.getObjectByName(name));
+        if (missing.length) {
+          throw new Error(
+            `This GLB has no VRM metadata or supported humanoid skeleton. Missing: ${missing.join(", ")}. ` +
+            "Use the app's local Blender rigging step or choose a humanoid VRM."
+          );
+        }
+      }
+      if (avatarRoot) { scene.remove(avatarRoot); VRMUtils.deepDispose(avatarRoot); }
+      vrm = loadedVrm;
+      avatarRoot = loadedRoot;
+      genericRoot = loadedVrm ? null : loadedRoot;
+      if (vrm) VRMUtils.rotateVRM0(vrm);
+      scene.add(avatarRoot);
       fitAvatar();
       $("start").disabled = false;
-      statusEl.textContent = "Avatar ready";
-      detailEl.textContent = `${label} loaded. Start webcam tracking to animate the humanoid rig.`;
+      statusEl.textContent = loadedVrm ? "Avatar ready" : "Rigged GLB ready";
+      detailEl.textContent = loadedVrm
+        ? `${label} loaded. Start webcam tracking to animate the humanoid rig.`
+        : `${label} loaded with a local humanoid skeleton. Head pose and body tracking are supported; single-photo meshes do not include realistic facial expressions.`;
     }
 
     $("sample").addEventListener("click", async () => {
@@ -242,7 +296,7 @@
     }
 
     function applyPose(landmarks) {
-      if (!vrm || !landmarks?.length) return;
+      if (!avatarRoot || !landmarks?.length) return;
       const p = landmarks;
       const setLimb = (name, a, b, restAngle) => {
         const bone = getBone(name);
@@ -251,10 +305,11 @@
         }
       };
       // Use stable landmark segments for a conservative first-pass body retarget.
+      const leftArmRest = genericRoot ? -Math.PI / 2 : Math.PI / 2;
       setLimb(boneNames.rightUpperArm, 12, 14, -Math.PI / 2);
       setLimb(boneNames.rightLowerArm, 14, 16, -Math.PI / 2);
-      setLimb(boneNames.leftUpperArm, 11, 13, Math.PI / 2);
-      setLimb(boneNames.leftLowerArm, 13, 15, Math.PI / 2);
+      setLimb(boneNames.leftUpperArm, 11, 13, leftArmRest);
+      setLimb(boneNames.leftLowerArm, 13, 15, leftArmRest);
       setLimb(boneNames.rightUpperLeg, 24, 26, -Math.PI / 2);
       setLimb(boneNames.rightLowerLeg, 26, 28, -Math.PI / 2);
       setLimb(boneNames.leftUpperLeg, 23, 25, -Math.PI / 2);
@@ -336,7 +391,7 @@
 
     function applyFace(result) {
       const face = result?.faceLandmarks?.[0];
-      if (!vrm || !face) return;
+      if (!avatarRoot || !face) return;
       const leftEye = face[33], rightEye = face[263], nose = face[1];
       const head = getBone(boneNames.head);
       if (head && leftEye && rightEye && nose) {
@@ -348,7 +403,7 @@
       }
       const categories = result.faceBlendshapes?.[0]?.categories || [];
       const values = Object.fromEntries(categories.map((x) => [x.categoryName, x.score]));
-      const manager = vrm.expressionManager;
+      const manager = vrm?.expressionManager;
       if (manager) {
         manager.setValue("blink", clamp(((values.eyeBlinkLeft || 0) + (values.eyeBlinkRight || 0)) / 2, 0, 1));
         manager.setValue("aa", clamp(values.jawOpen || 0, 0, 1));
@@ -399,8 +454,8 @@
     $("stop").addEventListener("click", () => {
       if (stream) stream.getTracks().forEach((track) => track.stop());
       stream = null; video.srcObject = null; video.hidden = true;
-      $("stop").disabled = true; $("start").disabled = !vrm;
-      trackingEl.textContent = "OFF"; statusEl.textContent = vrm ? "Avatar ready" : "Avatar not loaded";
+      $("stop").disabled = true; $("start").disabled = !avatarRoot;
+      trackingEl.textContent = "OFF"; statusEl.textContent = avatarRoot ? (vrm ? "Avatar ready" : "Rigged GLB ready") : "Avatar not loaded";
     });
 
     function render(now) {
