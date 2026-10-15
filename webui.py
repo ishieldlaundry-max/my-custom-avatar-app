@@ -15,6 +15,11 @@ import os.path as osp
 from omegaconf import OmegaConf
 
 from src.pipelines.gradio_live_portrait_pipeline import GradioLivePortraitPipeline
+from src.pipelines.local_photo_to_3d import (
+    LocalPhotoTo3DError,
+    generate_local_photo_mesh,
+    rig_local_photo_mesh,
+)
 from src.pipelines.full_body_animation_pipeline import (
     FullBodyAnimationCancelled,
     FullBodyAnimationError,
@@ -224,6 +229,48 @@ def cancel_full_body_animation():
 def validate_full_body_inputs(source_image, driving_video):
     """Return the preflight report without starting generation."""
     return inspect_full_body_inputs(source_image, driving_video).to_markdown()
+
+
+def generate_local_photo_avatar(source_image, texture_resolution):
+    """Create a local, textured GLB from one reference photo."""
+    if not source_image:
+        raise gr.Error("Upload a reference photo first.", duration=8)
+    try:
+        result = generate_local_photo_mesh(source_image, texture_resolution)
+    except LocalPhotoTo3DError as exc:
+        raise gr.Error(str(exc), duration=30) from exc
+    peak_memory = (
+        f" Peak model-allocated VRAM: {result.peak_allocated_vram_mb:.0f} MB."
+        if result.peak_allocated_vram_mb is not None
+        else " Stable Fast 3D did not report its peak model memory."
+    )
+    return (
+        result.model_path,
+        result.model_path,
+        f"Created a local textured mesh at {texture_resolution}px. "
+        f"Elapsed: {result.elapsed_seconds:.1f}s.{peak_memory} "
+        "This is model-allocated memory, not total GPU memory. "
+        "Next, optionally use the local Blender rigging step below. "
+        "Use a clear, upright full-body reference for the best automatic fit.",
+    )
+
+
+def rig_local_photo_avatar(mesh_file):
+    """Rig the generated GLB locally while preserving its imported materials."""
+    if not mesh_file:
+        raise gr.Error("Generate a textured GLB first.", duration=8)
+    try:
+        rigged_path = rig_local_photo_mesh(mesh_file)
+    except LocalPhotoTo3DError as exc:
+        raise gr.Error(str(exc), duration=30) from exc
+    return (
+        rigged_path,
+        rigged_path,
+        "Created a skinned humanoid GLB with local Blender automatic weights. "
+        "The textured mesh is preserved. Head and body tracking are available; "
+        "single-photo meshes do not gain realistic facial expressions or hidden geometry.",
+    )
+
 
 
 def change_animal_model(is_animal):
@@ -1059,6 +1106,75 @@ with gr.Blocks(
             'style="display:block;width:100%;height:760px;border:0;border-radius:14px;" '
             'allow="camera; fullscreen" loading="lazy"></iframe>'
         )
+
+        gr.Markdown(
+            "### Local photo-to-3D preview\n"
+            "Generate a textured GLB locally with Stable Fast 3D. This does not "
+            "send your photo to a 3D service. You can then bind it locally with "
+            "the free Blender app. Use an upright, full-body photo; the fit is "
+            "approximate and facial expressions are not generated. Windows setup and model access are required; "
+            "see `LOCAL_PHOTO_3D_WINDOWS.md`."
+        )
+        with gr.Row():
+            photo_avatar_source = gr.Image(
+                type="filepath",
+                label="Reference photo",
+            )
+            photo_avatar_texture_resolution = gr.Dropdown(
+                choices=[512, 768, 1024],
+                value=512,
+                label="Texture resolution",
+                info="512 is the low-memory starting point; higher values preserve more texture detail.",
+            )
+        gr.Markdown(
+            "The model uses about 6 GB VRAM at its default setting. "
+            "512px lowers texture memory and file size, but does not reduce "
+            "the shape model's full inference memory. Stop webcam tracking and "
+            "close GPU-heavy apps before generating."
+        )
+        photo_avatar_generate = gr.Button(
+            "GENERATE LOCAL TEXTURED MESH",
+            variant="secondary",
+        )
+        with gr.Row():
+            photo_avatar_model = gr.Model3D(
+                label="Generated textured model preview",
+                height=480,
+            )
+            photo_avatar_file = gr.File(
+                label="Download generated GLB",
+            )
+        photo_avatar_status = gr.Markdown()
+        photo_avatar_generate.click(
+            fn=generate_local_photo_avatar,
+            inputs=[photo_avatar_source, photo_avatar_texture_resolution],
+            outputs=[photo_avatar_model, photo_avatar_file, photo_avatar_status],
+            show_progress=True,
+        )
+        photo_avatar_rig_button = gr.Button(
+            "RIG GENERATED GLB LOCALLY WITH BLENDER",
+            variant="secondary",
+        )
+        with gr.Row():
+            photo_avatar_rig_model = gr.Model3D(
+                label="Humanoid-rigged textured GLB preview",
+                height=480,
+            )
+            photo_avatar_rig_file = gr.File(
+                label="Download rigged GLB",
+            )
+        photo_avatar_rig_status = gr.Markdown()
+        photo_avatar_rig_button.click(
+            fn=rig_local_photo_avatar,
+            inputs=[photo_avatar_file],
+            outputs=[
+                photo_avatar_rig_model,
+                photo_avatar_rig_file,
+                photo_avatar_rig_status,
+            ],
+            show_progress=True,
+        )
+
 
     with gr.Accordion("Offline full-body animation", open=False):
         gr.Markdown(
