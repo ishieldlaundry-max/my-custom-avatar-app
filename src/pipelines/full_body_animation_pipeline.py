@@ -11,6 +11,7 @@ import json
 import os
 import platform
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,10 @@ from typing import Optional
 
 class FullBodyAnimationError(RuntimeError):
     """A user-actionable full-body rendering error."""
+
+
+class FullBodyAnimationCancelled(FullBodyAnimationError):
+    """Raised after the active MimicMotion child process has been stopped."""
 
 
 @dataclass(frozen=True)
@@ -235,6 +240,22 @@ class MimicMotionBackend:
                 project_root / "mimicmotion_low_vram_runner.py",
             )
         ).expanduser()
+        self._process_lock = threading.Lock()
+        self._active_process: Optional[subprocess.Popen] = None
+        self._cancel_requested = False
+
+    def cancel_active_render(self) -> bool:
+        """Terminate the active MimicMotion process without touching other modes."""
+        with self._process_lock:
+            process = self._active_process
+            if process is None or process.poll() is not None:
+                return False
+            try:
+                process.terminate()
+            except OSError:
+                return False
+            self._cancel_requested = True
+            return True
 
     def _default_python_path(self) -> str:
         if platform.system().lower() == "windows":
@@ -346,18 +367,52 @@ class MimicMotionBackend:
         environment.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:256")
 
         started_at = time.time()
-        with log_path.open("w", encoding="utf-8") as log_file:
-            completed = subprocess.run(
-                command,
-                cwd=self.root,
-                env=environment,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                check=False,
-                text=True,
+        with self._process_lock:
+            if self._active_process is not None:
+                raise FullBodyAnimationError("A full-body render is already running.")
+            self._cancel_requested = False
+            log_file = log_path.open("w", encoding="utf-8")
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=self.root,
+                    env=environment,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+            except Exception:
+                log_file.close()
+                raise
+            self._active_process = process
+        try:
+            return_code = process.wait()
+        finally:
+            log_file.close()
+            with self._process_lock:
+                was_cancelled = (
+                    self._active_process is process and self._cancel_requested
+                )
+                if self._active_process is process:
+                    self._active_process = None
+                self._cancel_requested = False
+
+        if was_cancelled:
+            raise FullBodyAnimationCancelled(
+                "Full-body render cancelled. The backend log and any output files "
+                f"were preserved at {output_dir} (log: {log_path})."
             )
-        if completed.returncode != 0:
+        if return_code != 0:
             tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
+            if any("PyAV is not installed" in line for line in tail):
+                raise FullBodyAnimationError(
+                    "MimicMotion completed inference but could not write the MP4 "
+                    "because PyAV is missing. Install it in the isolated "
+                    "MimicMotion environment with "
+                    "`third_party\\MimicMotion\\.venv\\Scripts\\python.exe "
+                    "-m pip install av==12.0.0`, then rerun the render.\n\n"
+                    f"See {log_path}."
+                )
             raise FullBodyAnimationError(
                 "MimicMotion failed. See "
                 f"{log_path}.\n\n" + "\n".join(tail)
@@ -380,6 +435,10 @@ class FullBodyAnimationPipeline:
 
     def __init__(self, backend: Optional[MimicMotionBackend] = None):
         self.backend = backend or MimicMotionBackend()
+
+    def cancel_active_render(self) -> bool:
+        """Request cancellation of this pipeline's active offline render."""
+        return self.backend.cancel_active_render()
 
     def render(
         self,
