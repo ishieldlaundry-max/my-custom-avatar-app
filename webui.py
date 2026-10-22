@@ -266,7 +266,9 @@ def rig_local_photo_avatar(mesh_file):
     return (
         rigged_path,
         rigged_path,
-        "Created a skinned humanoid GLB with local Blender automatic weights. "
+        "Created a skinned humanoid GLB with local Blender. "
+        "If automatic weighting failed, approximate body weights were used; "
+        "joint bending may need manual adjustment and fallback fingers do not articulate. "
         "The textured mesh is preserved. Head and body tracking are available; "
         "single-photo meshes do not gain realistic facial expressions or hidden geometry.",
     )
