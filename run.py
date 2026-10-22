@@ -373,11 +373,16 @@ if __name__ == '__main__':
                         help='driving video')
     parser.add_argument('--cfg', required=False, type=str, default="configs/onnx_infer.yaml", help='inference config')
     parser.add_argument('--realtime', action='store_true', help='realtime inference')
+    parser.add_argument('--require-nvidia', action='store_true',
+                        help='Refuse CPU/Intel inference; require NVIDIA CUDA')
     parser.add_argument('--animal', action='store_true', help='use animal model')
     parser.add_argument('--paste_back', action='store_true', default=False, help='paste back to origin image')
     parser.add_argument('--virtual_camera', action='store_true',
                         help='broadcast composited realtime frames as a system webcam')
     args, unknown = parser.parse_known_args()
+    if args.require_nvidia or os.name == "nt":
+        from src.utils.nvidia_runtime import enforce_nvidia_runtime
+        enforce_nvidia_runtime()
 
     if args.dri_video.endswith(".pkl"):
         run_with_pkl(args)
