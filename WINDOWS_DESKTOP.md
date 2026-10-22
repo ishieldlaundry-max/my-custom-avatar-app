@@ -1,0 +1,84 @@
+# Windows desktop launcher and NVIDIA policy
+
+## What this delivers
+
+AvatarDesktop is a native Windows window hosting the local Gradio interface in
+Microsoft Edge WebView2. It does not open a browser tab. The server listens only
+on 127.0.0.1. It is a launcher, not a portable bundle of Python, models, or CUDA.
+Keep it in the existing FasterLivePortrait-local folder.
+
+Packaging does not improve model quality or inference speed by itself.
+The existing single-photo live path is experimental: strict identity currently
+prioritizes expressions and locks head pose to avoid face distortion. Natural
+head/shoulder motion and likeness remain separate work, not solved by packaging.
+
+## NVIDIA requirement
+
+Windows ONNX model sessions require CUDAExecutionProvider and explicitly disable
+CPU execution-provider fallback. Live capture also checks CUDA PyTorch and makes
+a real GPU allocation. If CUDA libraries or supported GPU kernels are missing,
+startup fails with an error instead of running the portrait models on Intel/CPU.
+CPU preprocessing, UI, camera capture and file IO still use CPU normally.
+The Linux Replit preview can use CPU; --require-nvidia enables the strict policy
+explicitly there too.
+
+The previous Windows log showed CPUExecutionProvider. That installation needs
+a compatible CUDA PyTorch / onnxruntime-gpu / cuDNN combination before it will
+pass this check. Do not reinstall all requirements or modify the SF3D environment.
+Collect main-environment versions and available providers before choosing GPU
+packages. A driver alone is not sufficient; ORT must load its CUDA libraries.
+Some ONNX graphs may be rejected by the strict no-CPU-operators policy.
+
+Windows, not the app, selects Intel versus NVIDIA for WebView/browser graphics.
+In Windows Settings > System > Display > Graphics, select AvatarDesktop.exe
+and choose High performance (NVIDIA). Use the same preference for your browser
+if using the browser viewer. Verify actual GPU engine usage in Task Manager;
+do not assume a MediaPipe "GPU" label identifies the NVIDIA adapter.
+
+## Build the executable on Windows
+
+Prerequisites: the existing working main venv, model files, NVIDIA driver,
+and Microsoft Edge WebView2 Runtime. Build on the target Windows computer.
+Linux cannot produce a tested Windows PyInstaller executable.
+
+In CMD:
+
+```bat
+cd /d C:\Users\emman\FasterLivePortrait-local
+build_desktop_windows.bat
+```
+
+The script creates a separate build-only environment and installs
+requirements_desktop.txt there. It does not modify CUDA PyTorch, ONNX Runtime,
+or Stable Fast 3D. The resulting AvatarDesktop.exe is copied into the project
+folder. Double-click it. The first model load can take several minutes.
+This is an unsigned executable; sign it before distributing publicly.
+
+The app window can be resized down to 640 x 480. Smaller layouts use scrolling.
+Minimizing to the taskbar hides the app; it does not resize its content or stop
+tracking. Use Stop live tracking or Exit to release the webcam.
+
+## Continuous webcam portrait
+
+Use the native App > Start live portrait from photo menu, choose a portrait,
+and confirm closing the workspace server to free its GPU memory. The live
+portrait opens in a separate OpenCV window. This is continuous capture, unlike
+the workspace's recorded-video input. Close other webcam applications first.
+Use App > Stop live tracking to stop it. Restart AvatarDesktop to return to
+the workspace after live mode. Closing AvatarDesktop stops its child processes.
+
+Alternatively, no executable build is needed to start the same live path:
+
+```bat
+camera.bat --src_image "C:\path\portrait.png" --paste_back
+```
+
+## Errors and logs
+
+App > Open logs opens the local logs folder. Startup and live runs have separate
+timestamped logs. If startup fails, inspect desktop-*.log; if live mode fails,
+inspect live-*.log. Logs are local, not uploaded automatically.
+
+This launcher has CPU unit tests here, but the Windows executable, WebView2
+camera permissions, NVIDIA inference, and end-to-end live motion must still be
+verified on Windows. No successful hardware test is implied by building it.
