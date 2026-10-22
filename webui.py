@@ -46,6 +46,11 @@ parser = argparse.ArgumentParser(description='Faster Live Portrait Pipeline')
 parser.add_argument('--mode', required=False, choices=("onnx", "trt", "auto"), default="auto")
 parser.add_argument('--use_mp', action='store_true', help='use mediapipe or not')
 parser.add_argument(
+    "--require-nvidia",
+    action="store_true",
+    help="Require a working NVIDIA runtime before selecting a backend or loading models.",
+)
+parser.add_argument(
     "--host_ip", type=str, default="127.0.0.1", help="host ip"
 )
 parser.add_argument("--port", type=int, default=9870, help="server port")
@@ -65,6 +70,11 @@ def resolve_runtime_mode(requested_mode):
         print("TensorRT was requested but is unavailable; falling back to ONNX.")
     return "trt" if cuda_available and trt_available else "onnx"
 
+
+if args.require_nvidia or os.name == "nt":
+    from src.utils.nvidia_runtime import enforce_nvidia_runtime
+
+    enforce_nvidia_runtime()
 
 runtime_mode = resolve_runtime_mode(args.mode)
 if runtime_mode == "onnx":
@@ -315,7 +325,7 @@ body, .gradio-container {
         radial-gradient(circle at 10% 35%, rgba(255, 0, 153, 0.07), transparent 25rem),
         var(--cyber-bg) !important;
     color: var(--cyber-text) !important;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;
+    font-family: "Segoe UI", system-ui, sans-serif !important;
 }
 
 .gradio-container {
@@ -583,9 +593,34 @@ footer { display: none !important; }
 CYBER_HEADER_HTML = """
 <header id="cyber-header">
     <div class="cyber-eyebrow">FasterLivePortrait / local inference console</div>
-    <h1>Bring a face online.</h1>
-    <p>Compose a source portrait, choose a motion signal, and render the final avatar locally on your NVIDIA workstation.</p>
+    <h1>Your portrait. Your motion.</h1>
+    <p>Render a portrait from recorded motion, track a 3D avatar live, or work with an offline full-body clip. Choose a workspace in the navigation.</p>
 </header>
+"""
+
+
+WORKSPACE_NAVIGATION_HTML = """
+<nav aria-label="Avatar workspaces">
+    <div class="workspace-brand">FasterLivePortrait<small>Local avatar studio</small></div>
+    <div id="workspace-tabs" role="tablist" aria-label="Workspaces" aria-orientation="vertical">
+        <button type="button" role="tab" id="nav-portrait" aria-controls="cyber-workspace" aria-selected="true" tabindex="0" data-workspace="cyber-workspace">
+            <span>Portrait workspace</span><small>Recorded motion → render</small>
+        </button>
+        <button type="button" role="tab" id="nav-live" aria-controls="live-avatar-page" aria-selected="false" tabindex="-1" data-workspace="live-avatar-page">
+            <span>Live 3D avatar</span><small>Continuous browser tracking</small>
+        </button>
+        <button type="button" role="tab" id="nav-full-body" aria-controls="full-body-page" aria-selected="false" tabindex="-1" data-workspace="full-body-page">
+            <span>Offline full body</span><small>Check inputs → render clip</small>
+        </button>
+        <button type="button" role="tab" id="nav-retargeting" aria-controls="retargeting-page" aria-selected="false" tabindex="-1" data-workspace="retargeting-page">
+            <span>Retargeting lab</span><small>Eye and lip adjustments</small>
+        </button>
+        <button type="button" role="tab" id="nav-advanced" aria-controls="advanced-page" aria-selected="false" tabindex="-1" data-workspace="advanced-page">
+            <span>Advanced controls</span><small>Portrait motion and output</small>
+        </button>
+    </div>
+    <p class="workspace-navigation-note">Switching keeps your inputs and running tasks. Stop webcam tracking or voice shifting in its workspace when finished.</p>
+</nav>
 """
 
 
@@ -611,6 +646,71 @@ AUDIO_WIDGET_HTML = """
 # creates a native AudioWorklet so no server-side audio or external service is used.
 js_func = r"""
 () => {
+    const bootWorkspaceNavigation = () => {
+        const tabs = document.getElementById("workspace-tabs");
+        if (!tabs || tabs.dataset.bound === "true") return;
+        const buttons = Array.from(tabs.querySelectorAll("[data-workspace]"));
+        const panels = buttons.map(button => document.getElementById(button.dataset.workspace));
+        if (panels.some(panel => !panel)) return;
+        tabs.dataset.bound = "true";
+        const compact = window.matchMedia("(max-width: 767px)");
+        const updateOrientation = () => {
+            tabs.setAttribute("aria-orientation", compact.matches ? "horizontal" : "vertical");
+            // Gradio 6 scopes media-rule selectors inside .contain; the outer
+            // container is not a descendant. Apply its compact padding directly.
+            const container = tabs.closest(".gradio-container");
+            if (container) {
+                if (compact.matches) container.style.setProperty("padding", "12px 12px 30px", "important");
+                else container.style.removeProperty("padding");
+            }
+        };
+        updateOrientation();
+        compact.addEventListener("change", updateOrientation);
+        panels.forEach((panel, index) => {
+            panel.setAttribute("role", "tabpanel");
+            panel.setAttribute("aria-labelledby", buttons[index].id);
+            panel.tabIndex = 0;
+        });
+        const activate = (index, updateUrl = true) => {
+            buttons.forEach((button, position) => {
+                const selected = position === index;
+                button.setAttribute("aria-selected", String(selected));
+                button.tabIndex = selected ? 0 : -1;
+                // Hide, never remove or re-create: Gradio state and event bindings stay intact.
+                panels[position].classList.toggle("workspace-inactive", !selected);
+                panels[position].hidden = !selected;
+            });
+            if (updateUrl) {
+                const url = new URL(window.location);
+                url.hash = "workspace-" + buttons[index].id.slice(4);
+                window.history.replaceState(null, "", url);
+                window.scrollTo({ top: 0, behavior: "instant" });
+            }
+        };
+        const restore = () => {
+            const index = buttons.findIndex(button => "#workspace-" + button.id.slice(4) === window.location.hash);
+            activate(index < 0 ? 0 : index, false);
+        };
+        buttons.forEach((button, index) => {
+            button.addEventListener("click", () => activate(index));
+            button.addEventListener("keydown", event => {
+                const previous = compact.matches ? "ArrowLeft" : "ArrowUp";
+                const next = compact.matches ? "ArrowRight" : "ArrowDown";
+                let target = index;
+                if (event.key === previous) target = (index - 1 + buttons.length) % buttons.length;
+                else if (event.key === next) target = (index + 1) % buttons.length;
+                else if (event.key === "Home") target = 0;
+                else if (event.key === "End") target = buttons.length - 1;
+                else return;
+                event.preventDefault();
+                activate(target);
+                buttons[target].focus();
+                if (compact.matches) buttons[target].scrollIntoView({ block: "nearest", inline: "nearest" });
+            });
+        });
+        window.addEventListener("hashchange", restore);
+        restore();
+    };
     const bootCyberpunkAudio = () => {
         const panel = document.querySelector("[data-pitch-shift-widget]");
         if (!panel || panel.dataset.bound === "true") return;
@@ -782,9 +882,13 @@ js_func = r"""
             return;
         }
         bootCyberpunkAudio();
+        bootWorkspaceNavigation();
     };
     setTimeout(refresh, 0);
-    setInterval(bootCyberpunkAudio, 1200);
+    setInterval(() => {
+        bootCyberpunkAudio();
+        bootWorkspaceNavigation();
+    }, 1200);
 }
 """
 
@@ -794,12 +898,15 @@ with gr.Blocks(
             primary_hue="cyan",
             secondary_hue="pink",
             neutral_hue="slate",
-            font=[gr.themes.GoogleFont("Inter")],
+            font=["Segoe UI", "system-ui", "sans-serif"],
         ),
-        css=CYBERPUNK_CSS,
+        css=CYBERPUNK_CSS + "\n" + load_description(
+            Path(__file__).parent / "assets" / "workspace_navigation.css"
+        ),
         js=js_func,
         title="FasterLivePortrait // Local Console",
 ) as demo:
+    gr.HTML(WORKSPACE_NAVIGATION_HTML, elem_id="workspace-navigation")
     gr.HTML(CYBER_HEADER_HTML)
     gr.HTML(CYBER_ALERTS_HTML)
 
@@ -809,12 +916,12 @@ with gr.Blocks(
 
             webcam_toggle = gr.Checkbox(
                 value=False,
-                label="Enable webcam capture",
-                info="Use the local camera as motion only; the target portrait keeps its identity.",
+                label="Use a recorded webcam clip",
+                info="Record, stop recording, then Render Portrait. This is not continuous realtime tracking.",
             )
             webcam_input = gr.Video(
                 sources=["webcam"],
-                label="Webcam source",
+                label="Recorded webcam motion",
                 visible=False,
                 elem_id="webcam-input",
             )
@@ -885,7 +992,7 @@ with gr.Blocks(
                         <div class="cyber-kicker">02 / Render output</div>
                         <div class="cyber-section-title">Portrait preview</div>
                     </div>
-                    <div class="status">LOCAL GPU PIPELINE</div>
+                    <div class="status">RECORDED INPUT / RENDER</div>
                 </div>
                 """
             )
@@ -976,82 +1083,6 @@ with gr.Blocks(
             v_tab_audio.select(lambda: "Audio", None, v_tab_selection)
             v_tab_text.select(lambda: "Text", None, v_tab_selection)
 
-            with gr.Accordion("Motion and render controls", open=False, elem_id="animation-controls"):
-                with gr.Row():
-                    runtime_mode_control = gr.Radio(
-                        ["onnx", "trt"],
-                        value=runtime_mode,
-                        label="Runtime mode",
-                        info="Selected at launch. Restart with --mode onnx or --mode trt to change it.",
-                        interactive=False,
-                    )
-                    diagnostic_mode = gr.Checkbox(
-                        value=False,
-                        label="Diagnostic mode",
-                        info="Show the driving-person comparison output.",
-                    )
-                    strict_target_identity = gr.Checkbox(
-                        value=True,
-                        label="Strict target portrait identity",
-                        info="Locked: the driver supplies motion only; the target portrait supplies every visible pixel.",
-                        interactive=False,
-                    )
-                    flag_virtual_camera_output = gr.Checkbox(
-                        value=False,
-                        label="Enable virtual camera output",
-                        info=(
-                            "Broadcast frames while this render runs. For continuous live webcam "
-                            "output, launch camera.bat with --paste_back --virtual_camera."
-                        ),
-                    )
-                with gr.Row():
-                    flag_relative_input = gr.Checkbox(
-                        value=True,
-                        label="Identity-preserving relative motion",
-                    )
-                    flag_stitching = gr.Checkbox(value=True, label="Stitching")
-                    flag_remap_input = gr.Checkbox(
-                        value=True,
-                        label="Preserve portrait body/background",
-                    )
-                    flag_is_animal = gr.Checkbox(value=False, label="Animal model")
-                with gr.Row():
-                    flag_color_match = gr.Checkbox(
-                        value=True,
-                        label="Enable color match",
-                        info="Match synthesized face color to the target portrait before paste-back.",
-                    )
-                    stitching_blending_radius = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.35,
-                        step=0.01,
-                        label="Stitching margin / mask blending radius",
-                    )
-                with gr.Row():
-                    driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
-                    cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
-                    animation_region = gr.Radio(
-                        ["exp", "pose", "lip", "eyes", "all"],
-                        value="exp",
-                        label="Animated region",
-                        info="Expression-only keeps the portrait's hair, body, and framing unchanged.",
-                    )
-                with gr.Row():
-                    flag_crop_driving_video_input = gr.Checkbox(value=False, label="Crop driving video")
-                    scale_crop_driving_video = gr.Number(value=2.2, label="Driving scale", minimum=1.8, maximum=3.2, step=0.05)
-                    vx_ratio_crop_driving_video = gr.Number(value=0.0, label="Driving X", minimum=-0.5, maximum=0.5, step=0.01)
-                    vy_ratio_crop_driving_video = gr.Number(value=-0.1, label="Driving Y", minimum=-0.5, maximum=0.5, step=0.01)
-                with gr.Row():
-                    flag_video_editing_head_rotation = gr.Checkbox(value=False, label="Head rotation")
-                    driving_smooth_observation_variance = gr.Number(
-                        value=1e-7,
-                        label="Motion smooth strength",
-                        minimum=1e-11,
-                        maximum=1e-2,
-                        step=1e-8,
-                    )
-
             gr.HTML('<div class="cyber-kicker">03 / Execute</div>')
             with gr.Row():
                 process_button_animation = gr.Button(
@@ -1097,9 +1128,11 @@ with gr.Blocks(
                 visible=False,
             )
 
-    with gr.Accordion("Live 3D avatar (prototype)", open=False):
+    with gr.Accordion("Live 3D avatar (prototype)", open=True, elem_id="live-avatar-page"):
         gr.Markdown(
-            "Load a humanoid VRM and animate its face and limbs from the webcam. "
+            "**Continuous realtime path.** Load a humanoid VRM and animate its face and limbs from the webcam. "
+            "For continuous photo-portrait output instead, launch `camera.bat` "
+            "with `--paste_back --virtual_camera`; the Portrait workspace renders recorded clips. "
             "Camera frames stay in the browser. The tracker and avatar libraries "
             "are downloaded from their public CDNs on first use."
         )
@@ -1177,8 +1210,7 @@ with gr.Blocks(
             show_progress=True,
         )
 
-
-    with gr.Accordion("Offline full-body animation", open=False):
+    with gr.Accordion("Offline full-body animation", open=True, elem_id="full-body-page"):
         gr.Markdown(
             "Use a **full-body target image** and a recorded webcam pose video. "
             "This mode keeps the target's body, hands, clothing, and skin as the "
@@ -1253,7 +1285,7 @@ with gr.Blocks(
             "Backend not started. Run `setup_full_body_windows.bat` on the Alienware.",
         )
 
-    with gr.Accordion("Retargeting lab", open=False):
+    with gr.Accordion("Retargeting lab", open=True, elem_id="retargeting-page"):
         gr.Markdown("Fine-tune eye and lip openness against a target portrait.")
         with gr.Row():
             eye_retargeting_slider.render()
@@ -1281,6 +1313,88 @@ with gr.Blocks(
                 ],
                 value="Clear retargeting",
             )
+
+    with gr.Accordion("Advanced portrait controls", open=True, elem_id="advanced-page"):
+        gr.Markdown(
+            "These settings apply to **Portrait workspace** renders. Inputs and settings "
+            "are kept when you switch workspaces. Return to Portrait workspace to render. "
+            "The separate Live 3D and Offline full-body paths do not use these controls."
+        )
+        with gr.Accordion("Motion and render controls", open=True, elem_id="animation-controls"):
+            with gr.Row():
+                runtime_mode_control = gr.Radio(
+                    ["onnx", "trt"],
+                    value=runtime_mode,
+                    label="Runtime mode",
+                    info="Selected at launch. Restart with --mode onnx or --mode trt to change it.",
+                    interactive=False,
+                )
+                diagnostic_mode = gr.Checkbox(
+                    value=False,
+                    label="Diagnostic mode",
+                    info="Show the driving-person comparison output.",
+                )
+                strict_target_identity = gr.Checkbox(
+                    value=True,
+                    label="Strict target portrait identity",
+                    info="Locked: the driver supplies motion only; the target portrait supplies every visible pixel.",
+                    interactive=False,
+                )
+                flag_virtual_camera_output = gr.Checkbox(
+                    value=False,
+                    label="Enable virtual camera output",
+                    info=(
+                        "Broadcast frames while this render runs. For continuous live webcam "
+                        "output, launch camera.bat with --paste_back --virtual_camera."
+                    ),
+                )
+            with gr.Row():
+                flag_relative_input = gr.Checkbox(
+                    value=True,
+                    label="Identity-preserving relative motion",
+                )
+                flag_stitching = gr.Checkbox(value=True, label="Stitching")
+                flag_remap_input = gr.Checkbox(
+                    value=True,
+                    label="Preserve portrait body/background",
+                )
+                flag_is_animal = gr.Checkbox(value=False, label="Animal model")
+            with gr.Row():
+                flag_color_match = gr.Checkbox(
+                    value=True,
+                    label="Enable color match",
+                    info="Match synthesized face color to the target portrait before paste-back.",
+                )
+                stitching_blending_radius = gr.Slider(
+                    minimum=0.0,
+                    maximum=1.0,
+                    value=0.35,
+                    step=0.01,
+                    label="Stitching margin / mask blending radius",
+                )
+            with gr.Row():
+                driving_multiplier = gr.Number(value=1.0, label="Motion multiplier", minimum=0.0, maximum=2.0, step=0.02)
+                cfg_scale = gr.Number(value=4.0, label="CFG scale", minimum=0.0, maximum=10.0, step=0.5)
+                animation_region = gr.Radio(
+                    ["exp", "pose", "lip", "eyes", "all"],
+                    value="exp",
+                    label="Animated region",
+                    info="Expression-only keeps the portrait's hair, body, and framing unchanged.",
+                )
+            with gr.Row():
+                flag_crop_driving_video_input = gr.Checkbox(value=False, label="Crop driving video")
+                scale_crop_driving_video = gr.Number(value=2.2, label="Driving scale", minimum=1.8, maximum=3.2, step=0.05)
+                vx_ratio_crop_driving_video = gr.Number(value=0.0, label="Driving X", minimum=-0.5, maximum=0.5, step=0.01)
+                vy_ratio_crop_driving_video = gr.Number(value=-0.1, label="Driving Y", minimum=-0.5, maximum=0.5, step=0.01)
+            with gr.Row():
+                flag_video_editing_head_rotation = gr.Checkbox(value=False, label="Head rotation")
+                driving_smooth_observation_variance = gr.Number(
+                    value=1e-7,
+                    label="Motion smooth strength",
+                    minimum=1e-11,
+                    maximum=1e-2,
+                    step=1e-8,
+                )
 
     webcam_toggle.change(
         lambda enabled: gr.update(visible=enabled),
