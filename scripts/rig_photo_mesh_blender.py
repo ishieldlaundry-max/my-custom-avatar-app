@@ -1,6 +1,9 @@
 """Bind a full-body GLB to a simple humanoid armature using Blender's local API."""
 
 import sys
+import json
+import math
+import struct
 from pathlib import Path
 
 import bpy
@@ -147,18 +150,114 @@ def create_humanoid_armature(bounds):
     return armature
 
 
+def has_complete_weights(mesh, armature):
+    deform_names = {bone.name for bone in armature.data.bones if bone.use_deform}
+    indices = {group.index for group in mesh.vertex_groups if group.name in deform_names}
+    return bool(mesh.data.vertices) and all(
+        any(group.group in indices and math.isfinite(group.weight) and group.weight > 0
+            for group in vertex.groups)
+        for vertex in mesh.data.vertices
+    )
+
+
+def segment_distance_squared(point, head, tail):
+    direction = tail - head
+    fraction = ((point - head).dot(direction) / direction.length_squared
+                if direction.length_squared > 1e-20 else 0.0)
+    closest = head + direction * max(0.0, min(1.0, fraction))
+    return (point - closest).length_squared
+
+
+def proximity_weights(mesh, armature):
+    """Coarse fallback: blend the nearest body bone with an adjacent bone.
+
+    Finger landmarks cannot be recovered from this mesh, so fallback weights
+    use the hand bones rather than pretending to recover finger articulation.
+    """
+    finger_parts = ("Thumb", "Index", "Middle", "Ring", "Little")
+    bones = [
+        bone for bone in armature.data.bones
+        if bone.use_deform and not any(part in bone.name for part in finger_parts)
+    ]
+    if not bones:
+        fail("No deform bones are available for approximate weighting.")
+    mesh.vertex_groups.clear()
+    groups = {bone.name: mesh.vertex_groups.new(name=bone.name) for bone in bones}
+    inverse = armature.matrix_world.inverted()
+    for vertex in mesh.data.vertices:
+        point = inverse @ mesh.matrix_world @ vertex.co
+        distances = {
+            bone.name: segment_distance_squared(point, bone.head_local, bone.tail_local)
+            for bone in bones
+        }
+        nearest = min(bones, key=lambda bone: distances[bone.name])
+        # Adjacent bones only: avoid blending across the two legs or arms.
+        candidates = [
+            bone for bone in bones
+            if bone == nearest or bone.parent == nearest or nearest.parent == bone
+        ]
+        selected = sorted(candidates, key=lambda bone: distances[bone.name])[:2]
+        weights = [1.0 / max(distances[bone.name], 1e-12) for bone in selected]
+        total = sum(weights)
+        for bone, weight in zip(selected, weights):
+            groups[bone.name].add([vertex.index], weight / total, "REPLACE")
+    world = mesh.matrix_world.copy()
+    mesh.parent = armature
+    mesh.matrix_world = world
+    modifiers = [modifier for modifier in mesh.modifiers if modifier.type == "ARMATURE"]
+    modifier = modifiers[0] if modifiers else mesh.modifiers.new("AvatarArmature", "ARMATURE")
+    modifier.object = armature
+    modifier.use_vertex_groups = True
+
+
 def bind_meshes(meshes, armature):
+    used_fallback = False
     for mesh in meshes:
         bpy.ops.object.select_all(action="DESELECT")
         mesh.select_set(True)
         armature.select_set(True)
         bpy.context.view_layer.objects.active = armature
+        auto_failed = False
         try:
             bpy.ops.object.parent_set(type="ARMATURE_AUTO")
         except RuntimeError as exc:
-            fail(f"Automatic weights failed for {mesh.name}: {exc}")
-        if not mesh.vertex_groups:
-            fail(f"Blender did not create skin weights for {mesh.name}.")
+            print(f"RIGGING_WARNING: Automatic weights failed for {mesh.name}: {exc}")
+            auto_failed = True
+        if auto_failed or not has_complete_weights(mesh, armature):
+            print(f"RIGGING_WARNING: Using approximate proximity weights for {mesh.name}; "
+                  "joint bending may need manual adjustment and fingers are not articulated.")
+            proximity_weights(mesh, armature)
+            used_fallback = True
+        if not has_complete_weights(mesh, armature):
+            fail(f"Mesh {mesh.name} still has vertices without usable skin weights.")
+    return used_fallback
+
+
+def verify_export(output):
+    """Blender may export successfully even when the mesh has no skin."""
+    data = output.read_bytes()
+    if len(data) < 20:
+        fail("Exported GLB is truncated.")
+    magic, version, length, chunk_length, chunk_type = struct.unpack_from("<4sIIII", data)
+    if (magic != b"glTF" or version != 2 or length != len(data)
+            or chunk_type != 0x4E4F534A or 20 + chunk_length > len(data)):
+        fail("Exported GLB has an invalid header.")
+    document = json.loads(data[20:20 + chunk_length])
+    skins = document.get("skins", [])
+    meshes = document.get("meshes", [])
+    mesh_nodes = [node for node in document.get("nodes", []) if "mesh" in node]
+    if not mesh_nodes:
+        fail("Exported GLB has no mesh nodes.")
+    for node in mesh_nodes:
+        skin = node.get("skin")
+        if not isinstance(skin, int) or not 0 <= skin < len(skins) or not skins[skin].get("joints"):
+            fail("Exported mesh has no usable skin binding.")
+        primitives = meshes[node["mesh"]].get("primitives", [])
+        if not primitives or not all(
+            {"JOINTS_0", "WEIGHTS_0"}.issubset(primitive.get("attributes", {}))
+            for primitive in primitives
+        ):
+            fail("Exported mesh has no joint/weight attributes.")
 
 
 def main():
@@ -173,17 +272,20 @@ def main():
         fail("The input GLB contains no mesh geometry.")
     bounds = mesh_bounds(meshes)
     armature = create_humanoid_armature(bounds)
-    bind_meshes(meshes, armature)
+    used_fallback = bind_meshes(meshes, armature)
+    armature["weighting_method"] = "approximate_proximity" if used_fallback else "automatic_heat"
     bpy.ops.object.select_all(action="SELECT")
     bpy.context.view_layer.objects.active = armature
     bpy.ops.export_scene.gltf(
         filepath=str(output),
         export_format="GLB",
         export_skins=True,
-        export_apply=True,
+        export_apply=False,
+        export_extras=True,
     )
     if not output.is_file():
         fail("Blender did not create the rigged GLB.")
+    verify_export(output)
     print(f"RIGGING_SUCCESS: {output}")
 
 
