@@ -1,0 +1,138 @@
+/* Navigation is additive: Gradio owns every input and callback. */
+:root {
+    --workspace-rail: 214px;
+    --workspace-gutter: clamp(16px, 2.2vw, 34px);
+}
+
+body, .gradio-container {
+    font-family: "Segoe UI", system-ui, sans-serif !important;
+}
+
+.gradio-container {
+    max-width: 1920px !important;
+    min-height: 100dvh;
+    padding: 22px var(--workspace-gutter) 40px
+        calc(var(--workspace-rail) + var(--workspace-gutter) * 2) !important;
+}
+
+#workspace-navigation {
+    position: fixed;
+    top: 22px;
+    left: var(--workspace-gutter);
+    width: var(--workspace-rail);
+    max-height: calc(100dvh - 44px);
+    overflow-y: auto;
+    z-index: 20;
+    border: 1px solid var(--cyber-line);
+    border-radius: 16px;
+    background: var(--cyber-panel);
+    padding: 18px 12px;
+}
+
+.workspace-brand {
+    color: var(--cyber-text);
+    font-size: 17px;
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    padding: 3px 9px 18px;
+}
+
+.workspace-brand small {
+    display: block;
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--cyber-muted);
+}
+
+#workspace-tabs { display: flex; flex-direction: column; gap: 7px; }
+#workspace-tabs button {
+    width: 100%;
+    min-height: 62px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 11px 12px;
+    background: transparent;
+    color: var(--cyber-text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+#workspace-tabs button span { display: block; font-size: 13px; font-weight: 700; }
+#workspace-tabs button small {
+    display: block;
+    margin-top: 4px;
+    color: var(--cyber-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+#workspace-tabs button:hover { background: var(--cyber-panel-strong); }
+#workspace-tabs button[aria-selected="true"] {
+    background: #152b39;
+    border-color: #386173;
+    box-shadow: inset 3px 0 var(--cyber-cyan);
+}
+#workspace-tabs button[aria-selected="true"] span { color: var(--cyber-cyan-soft); }
+#workspace-tabs button:focus-visible,
+[role="tabpanel"]:focus-visible {
+    outline: 2px solid var(--cyber-cyan);
+    outline-offset: 3px;
+}
+.workspace-navigation-note {
+    margin: 20px 9px 2px;
+    padding-top: 15px;
+    border-top: 1px solid var(--cyber-line);
+    color: var(--cyber-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+.workspace-inactive { display: none !important; }
+[role="tabpanel"] { min-width: 0 !important; scroll-margin-top: 20px; }
+#cyber-header { padding: 21px 26px; margin-bottom: 2px; border-radius: 16px; }
+#cyber-header h1 { font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.1; }
+#cyber-header p { font-size: 13px; line-height: 1.5; }
+#cyber-alerts { margin-bottom: 3px; gap: 10px; }
+.cyber-alert { font-size: 12px; padding: 10px 13px; }
+#cyber-workspace { gap: 14px; }
+#control-sidebar { min-width: min(290px, 100%) !important; }
+#preview-panel { min-width: min(420px, 100%) !important; }
+#preview-header { gap: 12px; flex-wrap: wrap; }
+#output-video, #output-video-secondary { min-height: 280px; }
+#output-video video, #output-video-secondary video { min-height: 250px; }
+#live-avatar-page iframe { width: 100%; max-width: 100%; }
+
+@media (max-width: 1100px) {
+    #cyber-workspace { flex-direction: column !important; }
+    #cyber-alerts { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+    .gradio-container { padding: 12px 12px 30px !important; }
+    #workspace-navigation {
+        position: static;
+        width: 100%;
+        max-height: none;
+        padding: 12px;
+        border-radius: 12px;
+    }
+    .workspace-brand { padding: 0 3px 12px; font-size: 15px; }
+    .workspace-brand small { display: inline; margin-left: 9px; font-size: 9px; }
+    #workspace-tabs {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 6px;
+        padding: 3px 2px 7px;
+        scrollbar-width: thin;
+    }
+    #workspace-tabs button { flex: 0 0 auto; width: auto; min-height: 44px; padding: 9px 12px; }
+    #workspace-tabs button small { display: none; }
+    .workspace-navigation-note { margin: 6px 3px 0; padding-top: 8px; font-size: 10px; }
+    #cyber-header { padding: 18px; }
+    #control-sidebar, #preview-panel { padding: 12px !important; }
+    [role="tabpanel"] .row { flex-wrap: wrap; }
+    #live-avatar-page iframe { height: 1040px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gradio-container * { scroll-behavior: auto !important; transition: none !important; }
+}
