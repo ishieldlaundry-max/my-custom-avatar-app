@@ -11,6 +11,9 @@ dist
 *.eg
 checkpoints_test
 logs
+.desktop-build-env/
+/generated-artifacts/
+/AvatarDesktop.exe
 third_partyweights/
 *.trt
 *.onnx
