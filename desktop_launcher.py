@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 
 
@@ -26,6 +27,29 @@ def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def choose_portrait(window, webview):
+    """Use the dialog API supported by the pinned pywebview 5.x build."""
+    return window.create_file_dialog(
+        webview.OPEN_DIALOG, allow_multiple=False,
+        file_types=("Portrait images (*.png;*.jpg;*.jpeg;*.webp)",),
+    )
+
+
+def guarded_action(action, error_path, notify):
+    """Windowed executables have no console: surface callback errors explicitly."""
+    def invoke():
+        try:
+            return action()
+        except Exception as exc:
+            try:
+                with error_path.open("a", encoding="utf-8") as stream:
+                    traceback.print_exc(file=stream)
+            except OSError:
+                pass
+            notify(f"{exc}\n\nDetails: {error_path}")
+    return invoke
 
 
 def main():
@@ -87,8 +111,7 @@ def main():
         if live and live.poll() is None:
             notice("Live tracking is already running. Use Stop live tracking first.")
             return
-        files = window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False,
-                                         file_types=("Portrait images (*.png;*.jpg;*.jpeg;*.webp)",))
+        files = choose_portrait(window, webview)
         if not files:
             return
         if not window.create_confirmation_dialog(
@@ -129,10 +152,13 @@ def main():
             stop_process(server)
 
     window.events.closed += cleanup
+    def guarded(action):
+        return guarded_action(action, logs / f"launcher-{stamp}.log", notice)
+
     menu = [Menu("App", [
-        MenuAction("Start live portrait from photo", start_live),
-        MenuAction("Stop live tracking", lambda: stop_process(live)),
-        MenuAction("Open logs", lambda: os.startfile(str(logs))),
+        MenuAction("Start live portrait from photo", guarded(start_live)),
+        MenuAction("Stop live tracking", guarded(lambda: stop_process(live))),
+        MenuAction("Open logs", guarded(lambda: os.startfile(str(logs)))),
         MenuAction("Exit", window.destroy),
     ])]
     try:
