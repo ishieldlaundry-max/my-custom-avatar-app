@@ -57,6 +57,12 @@ If 512 completes, run again at **768** and compare. Do not try 768 if 512
 reports CUDA out-of-memory.
 
 When the mesh is generated, click **Rig generated GLB locally with Blender**.
+If automatic bone-heat weighting fails or leaves vertices unweighted, the script
+tries approximate proximity weights for the body and hands. This fallback does
+not animate individual fingers, and joint bending may need manual adjustment.
+The Blender console reports when the fallback is used. A successful process
+exit alone is not sufficient: the script checks the exported skin binding
+before reporting success.
 The app writes a second file ending in `_rigged.glb`; it keeps the original
 textured mesh intact. This basic fit supports head pose and body tracking in
 the live avatar page. It does not create facial expression blendshapes, and
