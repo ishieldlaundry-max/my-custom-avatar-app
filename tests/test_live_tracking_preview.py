@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from src.utils import live_tracking_preview as preview
+from src.utils import live_portrait_effects as effects
 
 
 @pytest.fixture
@@ -80,15 +81,18 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
     cv.waitKey.side_effect = [-1, ord("c"), -1, ord("c"), ord("q")]
     cv.flip.side_effect = lambda f, _: f.copy()
     cv.resize.side_effect = lambda f, _: f
+    cv.cvtColor.side_effect = lambda f, _: f.copy()
     monkeypatch.setattr(preview, "cv2", cv)
-    pipe = NS(src_imgs=[frames[0]], src_infos=[{}], src_lmk_pre="stale")
+    monkeypatch.setattr(effects, "cv2", cv)
+    pipe = NS(src_imgs=[frames[0]],
+              src_infos=[[[{}, np.array([[2, 2], [6, 6]])]]], src_lmk_pre="stale")
     pipe.prepare_source = lambda *a, **k: True
     calls = []
     def render(frame, *args, **kwargs):
         assert pipe.src_lmk_pre is None
         calls.append((int(frame[0, 0, 0]), kwargs["first_frame"]))
         pipe.src_lmk_pre = "old landmarks"
-        return frame, frame, frame, None
+        return frame, frame, frame, [{k: np.zeros((1, 1)) for k in ("pitch", "yaw", "roll")}]
     pipe.run = render
     namespace = dict(
         Fore=NS(RED=""), Style=NS(RESET_ALL=""),
@@ -96,6 +100,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         FasterLivePortraitPipeline=lambda **_: pipe,
         resolve_camera_source=preview.resolve_camera_source,
         LiveTrackingPreview=preview.LiveTrackingPreview,
+        LivePortraitEffects=effects.LivePortraitEffects,
         LatestFrameCapture=lambda _: reader, cv2=cv, np=np,
         os=__import__("os"), time=time, datetime=datetime, deque=deque,
     )
