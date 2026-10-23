@@ -119,6 +119,7 @@ VIDEO_PIPELINE_ARGUMENT_NAMES = (
     "diagnostic_mode",
     "flag_virtual_camera_output",
     "strict_target_identity",
+    "use_driver_background",
 )
 
 
@@ -1344,8 +1345,18 @@ with gr.Blocks(
                 strict_target_identity = gr.Checkbox(
                     value=True,
                     label="Strict target portrait identity",
-                    info="Locked: the driver supplies motion only; the target portrait supplies every visible pixel.",
+                    info="The target photo supplies the intended person. Webcam-background mode may reveal the driver around the cutout if framing differs.",
                     interactive=False,
+                )
+                use_driver_background = gr.Checkbox(
+                    value=False,
+                    label="Use webcam background (experimental)",
+                    info=(
+                        "Locally removes the target photo background, then composites the target person "
+                        "over each webcam/video frame. Requires the Stable Fast 3D environment; the first "
+                        "use may download a local segmentation model. The driver's body may show around "
+                        "the cutout when framing or pose differs."
+                    ),
                 )
                 flag_virtual_camera_output = gr.Checkbox(
                     value=False,
@@ -1363,7 +1374,8 @@ with gr.Blocks(
                 flag_stitching = gr.Checkbox(value=True, label="Stitching")
                 flag_remap_input = gr.Checkbox(
                     value=True,
-                    label="Preserve portrait body/background",
+                    label="Paste face back into target portrait",
+                    info="Keeps the uploaded photo's body and background unless webcam-background mode is enabled. The photo is processed locally.",
                 )
                 flag_is_animal = gr.Checkbox(value=False, label="Animal model")
             with gr.Row():
@@ -1453,6 +1465,7 @@ with gr.Blocks(
             diagnostic_mode,
             flag_virtual_camera_output,
             strict_target_identity,
+            use_driver_background,
         ],
         outputs=[
             output_video_i2v,

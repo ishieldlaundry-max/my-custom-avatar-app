@@ -42,6 +42,11 @@ from src.utils.virtual_camera import VirtualCameraBroadcaster
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
 from src.utils.realtime_capture import LatestFrameCapture
+from src.utils.driver_background import (
+    DriverBackgroundError,
+    composite_target_over_driver_background,
+    extract_target_alpha,
+)
 
 if platform.system().lower() == 'windows':
     FFMPEG = "third_party/ffmpeg-7.0.1-full_build/bin/ffmpeg.exe"
@@ -59,6 +64,17 @@ def run_with_video(args):
     if not ret:
         print(f"no face in {args.src_image}! exit!")
         exit(1)
+    use_driver_background = getattr(args, "use_driver_background", False)
+    if use_driver_background and not args.paste_back:
+        raise ValueError("--use_driver_background requires --paste_back.")
+    if use_driver_background and pipe.is_source_video:
+        raise ValueError("--use_driver_background requires a still --src_image.")
+    target_alpha = None
+    if use_driver_background:
+        try:
+            target_alpha = extract_target_alpha(args.src_image, pipe.src_imgs[0].shape[:2])
+        except DriverBackgroundError as exc:
+            raise RuntimeError(str(exc)) from exc
     if args.virtual_camera and not args.realtime:
         raise ValueError("--virtual_camera requires --realtime.")
     if args.virtual_camera and not args.paste_back:
@@ -170,6 +186,10 @@ def run_with_video(args):
                 out_org = live_preview.effects.apply(
                     frame, out_org, dri_motion_info[0], reset=first_frame,
                     head_enabled=live_preview.head_enabled,
+                )
+            if target_alpha is not None:
+                out_org = composite_target_over_driver_background(
+                    out_org, frame, target_alpha
                 )
 
             if not args.realtime:
@@ -414,6 +434,11 @@ if __name__ == '__main__':
                         help='Refuse CPU/Intel inference; require NVIDIA CUDA')
     parser.add_argument('--animal', action='store_true', help='use animal model')
     parser.add_argument('--paste_back', action='store_true', default=False, help='paste back to origin image')
+    parser.add_argument(
+        '--use_driver_background',
+        action='store_true',
+        help='composite the target-person cutout over each webcam/video background frame',
+    )
     parser.add_argument('--virtual_camera', action='store_true',
                         help='broadcast composited realtime frames as a system webcam')
     args, unknown = parser.parse_known_args()

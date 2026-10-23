@@ -26,6 +26,10 @@ import platform
 import torch
 from PIL import Image
 from ..utils.virtual_camera import VirtualCameraBroadcaster
+from ..utils.driver_background import (
+    composite_target_over_driver_background,
+    extract_target_alpha,
+)
 
 if platform.system().lower() == 'windows':
     FFMPEG = "third_party/ffmpeg-7.0.1-full_build/bin/ffmpeg.exe"
@@ -73,6 +77,7 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             diagnostic_mode=False,
             flag_virtual_camera_output=False,
             strict_target_identity=True,
+            use_driver_background=False,
     ):
         """ for video driven potrait animation
         """
@@ -96,9 +101,23 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             self.init_models(is_animal=flag_is_animal)
 
         if input_source_path and input_driving_path:
+            if use_driver_background:
+                if tab_selection != "Image":
+                    raise gr.Error(
+                        "Webcam-background mode requires a still target photo.",
+                        duration=8,
+                    )
+                if v_tab_selection != "Video":
+                    raise gr.Error(
+                        "Webcam-background mode requires a webcam or driving video.",
+                        duration=8,
+                    )
+                flag_do_crop_input = True
+                flag_remap_input = True
+                flag_stitching = True
             if strict_target_identity:
-                # The target portrait is the only appearance canvas. The
-                # driving input is used for motion extraction only.
+                # The target supplies the animated person. An explicitly
+                # enabled background option can replace only the scene around it.
                 flag_relative_input = True
                 flag_do_crop_input = True
                 flag_remap_input = True
@@ -150,7 +169,8 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
                 video_path, video_path_concat, total_time = self.run_video_driving(input_driving_path,
                                                                                    input_source_path,
                                                                                    update_ret=update_ret,
-                                                                                   virtual_camera=flag_virtual_camera_output)
+                                                                                   virtual_camera=flag_virtual_camera_output,
+                                                                                   use_driver_background=use_driver_background)
                 gr.Info(f"Run successfully! Cost: {total_time} seconds!", duration=3)
                 return gr.update(visible=True), video_path, gr.update(visible=True), video_path_concat, gr.update(
                     visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
@@ -232,6 +252,18 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
             if not ret:
                 raise gr.Error(f"Error in processing source:{source_path} 💥!", duration=5)
 
+        target_alpha = None
+        if kwargs.get("use_driver_background", False):
+            if self.is_source_video:
+                raise gr.Error(
+                    "Webcam-background mode requires a still target photo, not a target video.",
+                    duration=8,
+                )
+            try:
+                target_alpha = extract_target_alpha(source_path, self.src_imgs[0].shape[:2])
+            except RuntimeError as exc:
+                raise gr.Error(str(exc), duration=18) from exc
+
         vcap = cv2.VideoCapture(driving_video_path)
         if self.is_source_video:
             duration, fps = utils.get_video_info(self.source_path)
@@ -285,6 +317,10 @@ class GradioLivePortraitPipeline(FasterLivePortraitPipeline):
                 if out_crop is None:
                     print(f"no face in driving frame:{i}")
                     continue
+                if target_alpha is not None:
+                    out_org = composite_target_over_driver_background(
+                        out_org, frame, target_alpha
+                    )
                 if virtual_camera is not None:
                     virtual_camera.send(out_org)
                 infer_times.append(time.time() - t0)

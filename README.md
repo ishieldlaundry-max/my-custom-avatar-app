@@ -114,6 +114,23 @@
 * tensorrt: `python webui.py --mode trt`
 * The default port is 9870. Open the webpage: `http://localhost:9870/`
 
+#### Optional webcam-scene background
+In **Advanced portrait controls**, enable **Use webcam background (experimental)**.
+This requires a still target photo and a webcam/driving video. The photo's person
+is cut out locally using the background-removal dependency in the isolated
+Stable Fast 3D environment, then composited over each driver frame. The first
+use may download that environment's segmentation weights; the photo is not
+uploaded. Because the driver remains in the camera frame, their silhouette may
+show outside the target cutout if the poses or framing differ.
+
+For the Windows camera launcher, pass the same option explicitly:
+
+Replace the example photo path with the actual location of your target image:
+
+```bat
+camera.bat --src_image "path\to\target.jpg" --paste_back --virtual_camera --use_driver_background
+```
+
 Hotkeys for webcam mode (when render window is on focus)\
 Q > exit\
 S > Stitching\
