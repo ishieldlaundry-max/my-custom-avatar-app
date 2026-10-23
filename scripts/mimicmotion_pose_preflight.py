@@ -65,8 +65,11 @@ def inspect_video(video_path: Path, backend_root: Path, max_samples: int) -> dic
         flush=True,
     )
     sys.path.insert(0, str(backend_root))
+    print("DWPose setup: importing decord.", file=sys.stderr, flush=True)
     import decord
+    print("DWPose setup: importing PyTorch.", file=sys.stderr, flush=True)
     import torch
+    print("DWPose setup: importing DWPose detector.", file=sys.stderr, flush=True)
     from mimicmotion.dwpose.dwpose_detector import DWposeDetector
 
     model_dir = backend_root / "models" / "DWPose"
