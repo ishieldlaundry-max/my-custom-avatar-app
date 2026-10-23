@@ -91,6 +91,15 @@ def run_with_video(args):
             exit(1)
     else:
         vcap = cv2.VideoCapture(capture_source)
+    use_clean_background = use_driver_background and args.realtime and is_webcam
+    clean_background = None
+    background_capture_error = ""
+    if use_clean_background:
+        print(
+            "Room background: step out of view and press G to capture; "
+            "step back in and press C to start tracking.",
+            flush=True,
+        )
     fps = int(vcap.get(cv2.CAP_PROP_FPS))
     if fps <= 0:
         fps = 30
@@ -131,8 +140,15 @@ def run_with_video(args):
     live_preview = None
     try:
         if args.realtime and is_webcam:
-            live_preview = LiveTrackingPreview(capture_source)
+            live_preview = LiveTrackingPreview(
+                capture_source,
+                allow_background_capture=use_clean_background,
+            )
             live_preview.effects = LivePortraitEffects(pipe.src_imgs[0], pipe.src_infos[0][0][1])
+            if use_clean_background:
+                live_preview.status = (
+                    "Step out of frame, then press G to capture the clean room background."
+                )
             infer_cfg.infer_params.live_motion_smoothing = True
             cv2.imshow("Render", cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR))
         while realtime_capture is not None or vcap.isOpened():
@@ -150,6 +166,32 @@ def run_with_video(args):
                 live_preview.show_camera(frame)
                 if not live_preview.poll():
                     break
+                if use_clean_background and live_preview.background_capture_requested:
+                    live_preview.background_capture_requested = False
+                    background_capture_error = ""
+                    try:
+                        clean_background = live_preview.capture_clean_background(
+                            realtime_capture,
+                            frame,
+                            pipe.src_imgs[0].shape[:2],
+                        )
+                    except DriverBackgroundError as exc:
+                        background_capture_error = f"{exc} Press G to retry."
+                        live_preview.status = background_capture_error
+                        continue
+                    finally:
+                        live_preview.background_capture_requested = False
+                    if clean_background is None:
+                        break
+                    live_preview.background_captured = True
+                    live_preview.status = (
+                        "Room captured. Step back in and press C to track; G to recapture."
+                    )
+                    cv2.imshow(
+                        "Render",
+                        cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR),
+                    )
+                    continue
                 effects = live_preview.effects
                 effects.handle_key(live_preview.last_key)
                 if live_preview.last_key in (ord("s"), ord("S")):
@@ -158,6 +200,12 @@ def run_with_video(args):
                 if effects.selecting:
                     live_preview.calibration_requested = False
                 infer_cfg.infer_params.live_head_motion = live_preview.head_enabled
+                if use_clean_background and clean_background is None:
+                    cv2.imshow(
+                        "Render",
+                        cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR),
+                    )
+                    continue
                 if not live_preview.ready:
                     cv2.imshow("Render", effects.selection_image(pipe.src_imgs[0]))
                     continue
@@ -189,7 +237,9 @@ def run_with_video(args):
                 )
             if target_alpha is not None:
                 out_org = composite_target_over_driver_background(
-                    out_org, frame, target_alpha
+                    out_org,
+                    clean_background if use_clean_background else frame,
+                    target_alpha,
                 )
 
             if not args.realtime:
@@ -437,7 +487,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--use_driver_background',
         action='store_true',
-        help='composite the target-person cutout over each webcam/video background frame',
+        help='composite the target cutout over a captured webcam room or each video frame',
     )
     parser.add_argument('--virtual_camera', action='store_true',
                         help='broadcast composited realtime frames as a system webcam')
