@@ -86,6 +86,37 @@ def test_rigged_glb_uses_local_blender_and_keeps_source(monkeypatch, tmp_path):
     assert kwargs["timeout"] == 900
 
 
+def test_rig_validation_reports_failed_checks_and_keeps_candidate(monkeypatch, tmp_path):
+    import src.pipelines.local_photo_to_3d as pipeline
+
+    source = tmp_path / "mesh.glb"
+    make_glb(source, skinned=False)
+    blender_script = tmp_path / "rig.py"
+    blender_script.write_text("# Blender fixture")
+    blender = tmp_path / "blender.exe"
+    blender.write_bytes(b"executable fixture")
+
+    def fake_run(command, **kwargs):
+        make_glb(Path(command[-1]), skinned=False)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(pipeline, "find_blender_executable", lambda _path=None: blender)
+    monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
+
+    candidate = tmp_path / "mesh_rigged.glb"
+    with pytest.raises(LocalPhotoTo3DError) as exc_info:
+        rig_local_photo_mesh(source, script_path=blender_script)
+
+    message = str(exc_info.value)
+    assert "rig validation failed" in message
+    assert "the exported GLB has no skin" in message
+    assert "JOINTS_0 and WEIGHTS_0" in message
+    assert "required humanoid joints are missing" in message
+    assert str(candidate) in message
+    assert candidate.is_file()
+    assert source.is_file()
+
+
 def make_glb(path, *, skinned):
     joint_names = [
         "Hips", "Spine", "Chest", "Neck", "Head",
