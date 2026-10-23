@@ -256,6 +256,9 @@ class OnnxRuntimePredictorSingleton(OnnxRuntimePredictor):
 
 def get_predictor(**kwargs):
     predict_type = kwargs.get("predict_type", "trt")
+    if predict_type == "ort" and kwargs.get("cuda_warping"):
+        from .cuda_warping import CudaWarpingPredictor
+        return CudaWarpingPredictor(**kwargs)
     if predict_type == "ort":
         return OnnxRuntimePredictorSingleton(**kwargs)
     elif predict_type == "trt":
