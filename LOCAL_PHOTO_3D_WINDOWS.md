@@ -49,8 +49,9 @@ requested. Never put that token in this repository or in chat.
 ## Generate and rig a preview
 
 Restart the app, expand **Live 3D avatar (prototype)**, and use **Local
-photo-to-3D preview**. Use an upright, full-body image with one person, visible
-arms and legs, and some space between the arms and torso. Close the webcam
+photo-to-3D preview**. Use one upright, head-to-toe image of one person with
+the face clearly visible, arms and legs unobstructed, and some space between
+the arms and torso. A higher-resolution image helps retain face detail. Close the webcam
 tracker, games, and other GPU-heavy software first. Run once at **512** and
 note the elapsed time and peak model-allocated VRAM shown below the preview.
 If 512 completes, run again at **768** and compare. Do not try 768 if 512
@@ -64,8 +65,9 @@ The Blender console reports when the fallback is used. A successful process
 exit alone is not sufficient: the script checks the exported skin binding
 before reporting success.
 The app writes a second file ending in `_rigged.glb`; it keeps the original
-textured mesh intact. This basic fit supports head pose and body tracking in
-the live avatar page. It does not create facial expression blendshapes, and
+textured mesh intact. This basic fit supports head and limb rotations in the
+live avatar page; it does not yet reproduce walking or full-body/foot
+translation. It does not create facial expression blendshapes, and
 photo geometry may not bend cleanly at joints. The original static GLB remains
 available if rigging fails.
 
@@ -73,6 +75,7 @@ The reported peak is PyTorch memory allocated by the model process; it is not
 the GPU's total usage across all applications. The workflow logs and the
 Windows Task Manager GPU memory graph can help identify memory used elsewhere.
 
-A single close-up photo cannot provide accurate side, back, or full-body
-details. This path does not add realistic facial expressions or recover
+Even a clear full-body front photo cannot provide accurate side, back, or
+occluded details. A small or blurry face in the reference can reduce facial
+likeness. This path does not add realistic facial expressions or recover
 occluded geometry.
