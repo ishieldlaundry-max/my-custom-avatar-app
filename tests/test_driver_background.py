@@ -36,6 +36,17 @@ def test_driver_background_cover_crops_without_stretching():
     assert np.any(result[:, :, 2] == 255)
 
 
+def test_median_clean_background_ignores_a_transient_person():
+    clean_room = np.full((4, 4, 3), 40, dtype=np.uint8)
+    frames = [clean_room.copy() for _ in range(5)]
+    frames[1][:, 1:3] = (0, 0, 255)
+    frames[2][:, 1:3] = (0, 0, 255)
+
+    result = background.median_clean_background(frames, (4, 4))
+
+    assert np.array_equal(result, clean_room)
+
+
 def test_extract_target_alpha_uses_isolated_worker_and_resizes(tmp_path, monkeypatch):
     source = tmp_path / "photo.jpg"
     source.write_bytes(b"local test image")
