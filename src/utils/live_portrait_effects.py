@@ -114,7 +114,7 @@ class LivePortraitEffects:
         self.reference = None
         self.camera_height = 480
         self.message = "S: mark shoulders in both windows (2D effect)."
-        cv2.setMouseCallback("Your camera", self._driver_click)
+        # Camera clicks are routed by LiveTrackingPreview so its toolbar wins.
         cv2.setMouseCallback("Render", self._target_click)
 
     def _driver_click(self, event, x, y, flags, param):
