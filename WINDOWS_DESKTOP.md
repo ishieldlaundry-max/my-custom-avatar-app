@@ -97,6 +97,12 @@ so. Preview updates are paced by inference, not a promise of 30 FPS.
 
 ### Head, shoulders and shading
 
+The **Your camera** window has a clickable toolbar below the camera image:
+**Calibrate**, **Head ON/OFF**, **Set shoulders**, **Shoulders off**,
+**Shading ON/OFF**, and **Stop tracking**. These perform the same actions as
+the keyboard shortcuts below. Toolbar clicks do not select shoulder points.
+Controls are processed between inference frames, so a slow render can delay a click.
+
 Live webcam mode uses adaptive expression/pose smoothing. Larger changes pass
 through faster than small tremors; this is not a measured accuracy guarantee.
 Head motion starts enabled: **H** toggles it. Relative yaw is limited to 15 degrees,
