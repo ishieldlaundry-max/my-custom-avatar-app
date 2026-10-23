@@ -1,9 +1,12 @@
 """OpenCV diagnostics for the exact camera frames supplied to portrait inference."""
 from pathlib import Path
 from collections import deque
+import time
 
 import cv2
 import numpy as np
+
+from .driver_background import DriverBackgroundError, median_clean_background
 
 
 def resolve_camera_source(source):
@@ -19,8 +22,11 @@ def resolve_camera_source(source):
 
 
 class LiveTrackingPreview:
-    def __init__(self, camera_index):
+    def __init__(self, camera_index, allow_background_capture=False):
         self.camera_index = camera_index
+        self.allow_background_capture = allow_background_capture
+        self.background_capture_requested = False
+        self.background_captured = False
         self.needs_reference = True
         self.calibration_requested = False
         self.head_enabled = True
@@ -61,17 +67,29 @@ class LiveTrackingPreview:
             (ord("l"), f"Shading: {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} (L)"),
             (ord("q"), "Stop tracking (Q)"),
         ]
+        if self.allow_background_capture:
+            labels.insert(
+                5,
+                (
+                    ord("g"),
+                    "Retake room (G)" if self.background_captured else "Capture room (G)",
+                ),
+            )
         self.buttons = []
+        columns = 4 if self.allow_background_capture else 3
+        button_width = 150 if self.allow_background_capture else 200
+        column_step = 158 if self.allow_background_capture else 210
+        font_scale = 0.4 if self.allow_background_capture else .49
         for index, (key, label) in enumerate(labels):
-            left = 10 + (index % 3) * 210
-            top = self.camera_height + 10 + (index // 3) * 52
-            bounds = (left, top, left + 200, top + 42)
+            left = 10 + (index % columns) * column_step
+            top = self.camera_height + 10 + (index // columns) * 52
+            bounds = (left, top, left + button_width, top + 42)
             self.buttons.append((bounds, key, label))
             color = (62, 58, 48) if key != ord("q") else (55, 45, 135)
-            cv2.rectangle(canvas, (left, top), (left + 200, top + 42), color, -1)
-            cv2.rectangle(canvas, (left, top), (left + 200, top + 42), (140, 130, 110), 1)
+            cv2.rectangle(canvas, (left, top), (left + button_width, top + 42), color, -1)
+            cv2.rectangle(canvas, (left, top), (left + button_width, top + 42), (140, 130, 110), 1)
             cv2.putText(canvas, label, (left + 10, top + 27),
-                        cv2.FONT_HERSHEY_SIMPLEX, .49, (255, 255, 255), 1, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(canvas, "Click a button or use its keyboard shortcut.",
                     (12, self.camera_height + 122), cv2.FONT_HERSHEY_SIMPLEX,
                     .42, (200, 200, 200), 1, cv2.LINE_AA)
@@ -119,7 +137,43 @@ class LiveTrackingPreview:
             self.status = "Calibrating on the next detected face..."
         if key in (ord("h"), ord("H")):
             self.head_enabled = not self.head_enabled
+        if self.allow_background_capture and key in (ord("g"), ord("G")):
+            self.background_capture_requested = True
+            self.status = "Capturing room background. Stay out of frame."
         return True
+
+    def capture_clean_background(
+        self,
+        capture,
+        first_frame,
+        target_shape,
+        sample_count=7,
+        sample_interval=0.12,
+    ):
+        """Capture a short median plate while the user is outside the camera view."""
+        if sample_count < 1:
+            raise ValueError("Background capture needs at least one frame.")
+
+        frames = [first_frame]
+        for sample_index in range(1, sample_count):
+            if sample_interval > 0:
+                time.sleep(sample_interval)
+            ok, frame = capture.read(timeout=1.0)
+            if not ok or frame is None:
+                raise DriverBackgroundError(
+                    "Could not read enough webcam frames for the clean background. "
+                    "Check the camera, then press G to retry."
+                )
+            self.status = (
+                f"Capturing clean room background {sample_index + 1}/{sample_count}. "
+                "Stay out of frame."
+            )
+            self.show_camera(frame)
+            if not self.poll():
+                return None
+            frames.append(frame)
+
+        return median_clean_background(frames, target_shape)
 
     @property
     def ready(self):
