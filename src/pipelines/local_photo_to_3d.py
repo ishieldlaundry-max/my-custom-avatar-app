@@ -52,6 +52,14 @@ class LocalPhotoMeshResult:
     peak_allocated_vram_mb: float | None
 
 
+@dataclass(frozen=True)
+class LocalPhotoAvatarResult:
+    model_path: str
+    source_mesh_path: str
+    reconstruction_seconds: float
+    peak_allocated_vram_mb: float | None
+
+
 def find_blender_executable(blender_path: str | Path | None = None) -> Path:
     """Find a local Blender install without downloading or installing anything."""
     configured_path = blender_path or os.environ.get("BLENDER_EXECUTABLE")
@@ -315,4 +323,40 @@ def generate_local_photo_mesh(
         model_path=str(model_path),
         elapsed_seconds=elapsed_seconds,
         peak_allocated_vram_mb=peak_memory,
+    )
+
+
+def generate_rigged_local_photo_avatar(
+    source_image: str | Path,
+    texture_resolution: int = 512,
+    *,
+    sf3d_root: Path = SF3D_ROOT,
+    python_path: Path | None = None,
+    blender_path: str | Path | None = None,
+    script_path: Path = BLENDER_RIG_SCRIPT,
+) -> LocalPhotoAvatarResult:
+    """Generate and rig a photo avatar in one user-facing operation."""
+    mesh = generate_local_photo_mesh(
+        source_image,
+        texture_resolution,
+        sf3d_root=sf3d_root,
+        python_path=python_path,
+    )
+    try:
+        rigged_path = rig_local_photo_mesh(
+            mesh.model_path,
+            blender_path=blender_path,
+            script_path=script_path,
+        )
+    except LocalPhotoTo3DError as exc:
+        raise LocalPhotoTo3DError(
+            "Photo reconstruction succeeded, but automatic avatar preparation "
+            f"could not finish. The textured mesh is preserved at {mesh.model_path}. "
+            f"{exc}"
+        ) from exc
+    return LocalPhotoAvatarResult(
+        model_path=rigged_path,
+        source_mesh_path=mesh.model_path,
+        reconstruction_seconds=mesh.elapsed_seconds,
+        peak_allocated_vram_mb=mesh.peak_allocated_vram_mb,
     )
