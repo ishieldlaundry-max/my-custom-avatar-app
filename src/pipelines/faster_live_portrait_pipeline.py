@@ -22,6 +22,7 @@ from ..utils.utils import resize_to_limit, get_rotation_matrix, calc_lip_close_r
     calc_eye_close_ratio, transform_keypoint, concat_feat
 from src.utils import utils
 from ..utils.color_alignment import align_lab_color_tensor
+from ..utils.live_motion import AdaptiveMotionFilter, bounded_pose
 
 
 class FasterLivePortraitPipeline:
@@ -542,6 +543,11 @@ class FasterLivePortraitPipeline:
                 else:
                     t_new = x_s_info['t'].copy()
 
+            if realtime and self.cfg.infer_params.get("live_head_motion", False):
+                # Keep strict target appearance, scale, translation and expression
+                # bounds. Override only pose, with a small calibrated relative turn.
+                head_delta = bounded_pose(x_d_i_info, x_d_0_info)
+                R_new = get_rotation_matrix(*head_delta) @ R_s
             t_new[..., 2] = 0  # zero tz
             x_d_i_new = scale_new * (x_c_s @ R_new + delta_new) + t_new
             if not self.is_animal:
@@ -671,7 +677,15 @@ class FasterLivePortraitPipeline:
             "scale": scale,
             "kp": kp
         }
-        R_d_i = get_rotation_matrix(pitch, yaw, roll)
+        if realtime and self.cfg.infer_params.get("live_motion_smoothing", False):
+            if not hasattr(self, "_live_motion_filter"):
+                self._live_motion_filter = AdaptiveMotionFilter()
+            x_d_i_info = self._live_motion_filter.process(
+                x_d_i_info, reset=kwargs.get("first_frame", False) or self.R_d_0 is None
+            )
+        R_d_i = get_rotation_matrix(
+            x_d_i_info["pitch"], x_d_i_info["yaw"], x_d_i_info["roll"]
+        )
         x_d_i_info["R"] = R_d_i
         x_d_i_info_copy = copy.deepcopy(x_d_i_info)
         for key in x_d_i_info_copy:
