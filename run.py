@@ -40,6 +40,7 @@ from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeli
 from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
+from src.utils.live_portrait_effects import LivePortraitEffects
 from src.utils.realtime_capture import LatestFrameCapture
 
 if platform.system().lower() == 'windows':
@@ -49,7 +50,7 @@ else:
 
 
 def run_with_video(args):
-    print(Fore.RED+'Render,  Q > exit,  S > Stitching,  Z > RelativeMotion,  X > AnimationRegion,  C > CropDrivingVideo, KL > AdjustSourceScale, NM > AdjustDriverScale,  Space > Webcamassource,  R > SwitchRealtimeWebcamUpdate'+Style.RESET_ALL)
+    print(Fore.RED + 'Live: C calibrate | H head | S select shoulders | B shoulders off | L shading | Q exit' + Style.RESET_ALL)
     infer_cfg = OmegaConf.load(args.cfg)
     infer_cfg.infer_params.flag_pasteback = args.paste_back
 
@@ -115,6 +116,8 @@ def run_with_video(args):
     try:
         if args.realtime and is_webcam:
             live_preview = LiveTrackingPreview(capture_source)
+            live_preview.effects = LivePortraitEffects(pipe.src_imgs[0], pipe.src_infos[0][0][1])
+            infer_cfg.infer_params.live_motion_smoothing = True
             cv2.imshow("Render", cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR))
         while realtime_capture is not None or vcap.isOpened():
             if realtime_capture is not None:
@@ -131,7 +134,16 @@ def run_with_video(args):
                 live_preview.show_camera(frame)
                 if not live_preview.poll():
                     break
+                effects = live_preview.effects
+                effects.handle_key(live_preview.last_key)
+                if live_preview.last_key in (ord("s"), ord("S")):
+                    live_preview.needs_reference = True
+                    live_preview.calibration_requested = False
+                if effects.selecting:
+                    live_preview.calibration_requested = False
+                infer_cfg.infer_params.live_head_motion = live_preview.head_enabled
                 if not live_preview.ready:
+                    cv2.imshow("Render", effects.selection_image(pipe.src_imgs[0]))
                     continue
                 # Re-detect rather than following stale landmarks on the background.
                 # This also reacquires the face after it leaves the camera view.
@@ -154,6 +166,11 @@ def run_with_video(args):
             if out_crop is None:
                 print(f"no face in driving frame:{frame_ind}")
                 continue
+            if live_preview is not None:
+                out_org = live_preview.effects.apply(
+                    frame, out_org, dri_motion_info[0], reset=first_frame,
+                    head_enabled=live_preview.head_enabled,
+                )
 
             if not args.realtime:
                 motion_lst.append(dri_motion_info[0])
