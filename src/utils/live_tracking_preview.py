@@ -21,6 +21,9 @@ class LiveTrackingPreview:
         self.camera_index = camera_index
         self.needs_reference = True
         self.calibration_requested = False
+        self.head_enabled = True
+        self.last_key = -1
+        self.effects = None
         self.status = "Hold a neutral face, eyes open. Press C to calibrate."
         for title, x in (("Your camera", 20), ("Render", 690)):
             cv2.namedWindow(title, cv2.WINDOW_NORMAL)
@@ -32,11 +35,19 @@ class LiveTrackingPreview:
         preview = cv2.flip(frame, 1)
         height, width = preview.shape[:2]
         preview = cv2.resize(preview, (640, max(1, round(height * 640 / width))))
+        if self.effects is not None:
+            self.effects.camera_height = preview.shape[0]
+            for index, (x, y) in enumerate(self.effects.driver_anchors):
+                point = (int((1 - x) * 640), int(y * preview.shape[0]))
+                cv2.circle(preview, point, 7, (0, 255, 255), 2)
         lines = [
             f"Camera {self.camera_index} | Mirrored input | C: calibrate | Q: quit",
             self.status,
-            "Expression tracking only; portrait head rotation is locked.",
+            f"H: bounded head motion {'ON' if self.head_enabled else 'OFF'} | "
+            f"L: shading {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} | B: shoulders off",
         ]
+        if self.effects is not None:
+            lines.append(self.effects.message)
         for index, line in enumerate(lines):
             position = (10, 24 + index * 27)
             cv2.putText(preview, line, position, cv2.FONT_HERSHEY_SIMPLEX,
@@ -47,6 +58,7 @@ class LiveTrackingPreview:
 
     def poll(self):
         key = cv2.waitKey(1) & 0xFF
+        self.last_key = key
         if key in (ord("q"), 27):
             return False
         if any(cv2.getWindowProperty(name, cv2.WND_PROP_VISIBLE) < 1
@@ -56,6 +68,8 @@ class LiveTrackingPreview:
             self.needs_reference = True
             self.calibration_requested = True
             self.status = "Calibrating on the next detected face..."
+        if key in (ord("h"), ord("H")):
+            self.head_enabled = not self.head_enabled
         return True
 
     @property
