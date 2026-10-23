@@ -47,7 +47,7 @@
 <body>
   <section class="shell">
     <header class="top">
-  <div><h2>Live 3D Avatar</h2><div class="sub">Browser-side webcam tracking → VRM or locally rigged GLB</div></div>
+  <div><h2>Live 3D Avatar</h2><div class="sub">Photo avatar prepared automatically → browser-side webcam tracking</div></div>
       <div class="status" id="status">Avatar not loaded</div>
     </header>
     <div class="layout">
@@ -61,7 +61,7 @@
         <input id="model-file" type="file" accept=".vrm,.glb">
         <button id="start" disabled>Start webcam tracking</button>
         <button id="stop" disabled>Stop webcam</button>
-        <div id="detail">Load a humanoid VRM or a Blender-rigged GLB. The first model request and tracking models require an internet connection.</div>
+        <div id="detail">Create a photo avatar in the section above, or load a compatible humanoid VRM. The first model request and tracking models require an internet connection.</div>
         <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
@@ -192,7 +192,7 @@
         if (missing.length) {
           throw new Error(
             `This GLB has no VRM metadata or supported humanoid skeleton. Missing: ${missing.join(", ")}. ` +
-            "Use the app's local Blender rigging step or choose a humanoid VRM."
+            "Create and load a photo avatar above, or choose a compatible humanoid VRM."
           );
         }
       }
@@ -204,11 +204,39 @@
       scene.add(avatarRoot);
       fitAvatar();
       $("start").disabled = false;
-      statusEl.textContent = loadedVrm ? "Avatar ready" : "Rigged GLB ready";
+      statusEl.textContent = "Avatar ready";
       detailEl.textContent = loadedVrm
         ? `${label} loaded. Start webcam tracking to animate the humanoid rig.`
         : `${label} loaded with a local humanoid skeleton. Head pose and body tracking are supported; single-photo meshes do not include realistic facial expressions.`;
     }
+
+    window.addEventListener("message", async (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      const message = event.data;
+      if (message?.type !== "load-photo-avatar" || typeof message.url !== "string") return;
+      let modelUrl;
+      try {
+        modelUrl = new URL(message.url, window.location.href);
+      } catch {
+        statusEl.textContent = "Avatar load failed";
+        detailEl.textContent = "The generated avatar link was invalid.";
+        return;
+      }
+      if (
+        modelUrl.origin !== window.location.origin ||
+        !modelUrl.pathname.startsWith("/gradio_api/file=")
+      ) {
+        statusEl.textContent = "Avatar load failed";
+        detailEl.textContent = "The generated avatar must come from this local app.";
+        return;
+      }
+      try {
+        await loadAvatar(modelUrl.href, message.label || "Prepared photo avatar");
+      } catch (error) {
+        statusEl.textContent = "Avatar load failed";
+        detailEl.textContent = error.message;
+      }
+    });
 
     $("sample").addEventListener("click", async () => {
       $("sample").disabled = true;
@@ -455,7 +483,7 @@
       if (stream) stream.getTracks().forEach((track) => track.stop());
       stream = null; video.srcObject = null; video.hidden = true;
       $("stop").disabled = true; $("start").disabled = !avatarRoot;
-      trackingEl.textContent = "OFF"; statusEl.textContent = avatarRoot ? (vrm ? "Avatar ready" : "Rigged GLB ready") : "Avatar not loaded";
+      trackingEl.textContent = "OFF"; statusEl.textContent = avatarRoot ? "Avatar ready" : "Avatar not loaded";
     });
 
     function render(now) {
