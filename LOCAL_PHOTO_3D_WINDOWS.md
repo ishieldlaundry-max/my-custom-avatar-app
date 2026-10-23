@@ -1,7 +1,8 @@
 # Local photo-to-3D preview on Windows
 
-This optional workflow makes a textured GLB from one image, then can bind it
-to a basic humanoid skeleton locally with Blender. It does not create a
+This optional workflow makes a textured GLB from one image, then automatically
+binds it to a basic humanoid skeleton locally with Blender. The app handles both
+steps; you do not need to manually rig or reload the model. It does not create a
 production-accurate face or body. The unseen sides and body are inferred by the
 model, and the automatic rig fit is approximate. Stable Fast 3D's Windows
 support is experimental.
@@ -46,30 +47,31 @@ existing `venv`. After installation, use the Hugging Face CLI inside the
 isolated environment to sign in with the token for the model access you
 requested. Never put that token in this repository or in chat.
 
-## Generate and rig a preview
+## Create and run a photo avatar
 
-Restart the app, expand **Live 3D avatar (prototype)**, and use **Local
-photo-to-3D preview**. Use one upright, head-to-toe image of one person with
-the face clearly visible, arms and legs unobstructed, and some space between
-the arms and torso. A higher-resolution image helps retain face detail. Close the webcam
-tracker, games, and other GPU-heavy software first. Run once at **512** and
-note the elapsed time and peak model-allocated VRAM shown below the preview.
-If 512 completes, run again at **768** and compare. Do not try 768 if 512
-reports CUDA out-of-memory.
+Restart the app and expand **Live 3D avatar (prototype)**. Upload one upright,
+head-to-toe image of one person with the face clearly visible, arms and legs
+unobstructed, and some space between the arms and torso. A higher-resolution
+image helps retain face detail. Close the webcam tracker, games, and other
+GPU-heavy software first. Choose **512** texture detail initially; higher
+detail does not reduce the shape model's full inference memory. Click
+**Create & Load My Live Avatar**. The app generates the textured mesh, runs
+Blender's automatic rigging step, and loads the prepared GLB into the live
+preview. Then press **Start webcam tracking** to grant camera access and begin
+tracking.
 
-When the mesh is generated, click **Rig generated GLB locally with Blender**.
-If automatic bone-heat weighting fails or leaves vertices unweighted, the script
-tries approximate proximity weights for the body and hands. This fallback does
-not animate individual fingers, and joint bending may need manual adjustment.
-The Blender console reports when the fallback is used. A successful process
-exit alone is not sufficient: the script checks the exported skin binding
-before reporting success.
-The app writes a second file ending in `_rigged.glb`; it keeps the original
-textured mesh intact. This basic fit supports head and limb rotations in the
-live avatar page; it does not yet reproduce walking or full-body/foot
-translation. It does not create facial expression blendshapes, and
-photo geometry may not bend cleanly at joints. The original static GLB remains
-available if rigging fails.
+If automatic bone-heat weighting fails, the script tries approximate proximity
+weights for the body and hands. This fallback does not animate individual
+fingers, and joint bending may need quality improvements. The app checks the
+exported skin and reports which validation failed. The original textured mesh
+is kept; when a candidate rigged GLB is available, the error identifies its
+location so the failure can be investigated without asking you to run Blender
+manually.
+
+This basic fit supports head and limb rotations in the live avatar page; it
+does not yet reproduce walking or full-body/foot translation. It does not
+create facial expression blendshapes, and photo geometry may not bend cleanly
+at joints.
 
 The reported peak is PyTorch memory allocated by the model process; it is not
 the GPU's total usage across all applications. The workflow logs and the
