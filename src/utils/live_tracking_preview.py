@@ -1,7 +1,9 @@
 """OpenCV diagnostics for the exact camera frames supplied to portrait inference."""
 from pathlib import Path
+from collections import deque
 
 import cv2
+import numpy as np
 
 
 def resolve_camera_source(source):
@@ -24,11 +26,56 @@ class LiveTrackingPreview:
         self.head_enabled = True
         self.last_key = -1
         self.effects = None
+        self.camera_height = 0
+        self.buttons = []
+        self.pending_actions = deque(maxlen=12)
         self.status = "Hold a neutral face, eyes open. Press C to calibrate."
         for title, x in (("Your camera", 20), ("Render", 690)):
             cv2.namedWindow(title, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(title, 640, 560)
             cv2.moveWindow(title, x, 60)
+        cv2.setMouseCallback("Your camera", self._on_mouse)
+
+    def _on_mouse(self, event, x, y, flags, param):
+        if event != cv2.EVENT_LBUTTONDOWN:
+            return
+        for (left, top, right, bottom), key, _ in self.buttons:
+            if left <= x < right and top <= y < bottom:
+                self.pending_actions.append(key)
+                return
+        # The toolbar must never be interpreted as a shoulder selection.
+        if self.effects is not None and 0 <= x < 640 and 0 <= y < self.camera_height:
+            self.effects._driver_click(event, x, y, flags, param)
+
+    def add_controls(self, preview):
+        """Draw buttons in image coordinates, which OpenCV maps on resize."""
+        self.camera_height = preview.shape[0]
+        canvas = np.zeros((self.camera_height + 132, 640, 3), dtype=np.uint8)
+        canvas[:self.camera_height, :preview.shape[1]] = preview
+        canvas[self.camera_height:] = (30, 26, 23)
+        labels = [
+            (ord("c"), "Calibrate (C)"),
+            (ord("h"), f"Head: {'ON' if self.head_enabled else 'OFF'} (H)"),
+            (ord("s"), "Set shoulders (S)"),
+            (ord("b"), "Shoulders off (B)"),
+            (ord("l"), f"Shading: {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} (L)"),
+            (ord("q"), "Stop tracking (Q)"),
+        ]
+        self.buttons = []
+        for index, (key, label) in enumerate(labels):
+            left = 10 + (index % 3) * 210
+            top = self.camera_height + 10 + (index // 3) * 52
+            bounds = (left, top, left + 200, top + 42)
+            self.buttons.append((bounds, key, label))
+            color = (62, 58, 48) if key != ord("q") else (55, 45, 135)
+            cv2.rectangle(canvas, (left, top), (left + 200, top + 42), color, -1)
+            cv2.rectangle(canvas, (left, top), (left + 200, top + 42), (140, 130, 110), 1)
+            cv2.putText(canvas, label, (left + 10, top + 27),
+                        cv2.FONT_HERSHEY_SIMPLEX, .49, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(canvas, "Click a button or use its keyboard shortcut.",
+                    (12, self.camera_height + 122), cv2.FONT_HERSHEY_SIMPLEX,
+                    .42, (200, 200, 200), 1, cv2.LINE_AA)
+        return canvas
 
     def show_camera(self, frame):
         # Mirror only the display, never the frame passed to the model.
@@ -54,10 +101,12 @@ class LiveTrackingPreview:
                         .47, (0, 0, 0), 3, cv2.LINE_AA)
             cv2.putText(preview, line, position, cv2.FONT_HERSHEY_SIMPLEX,
                         .47, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.imshow("Your camera", preview)
+        cv2.imshow("Your camera", self.add_controls(preview))
 
     def poll(self):
         key = cv2.waitKey(1) & 0xFF
+        if key not in (ord("q"), 27) and self.pending_actions:
+            key = self.pending_actions.popleft()
         self.last_key = key
         if key in (ord("q"), 27):
             return False
