@@ -1130,7 +1130,8 @@ with gr.Blocks(
 
     with gr.Accordion("Live 3D avatar (prototype)", open=True, elem_id="live-avatar-page"):
         gr.Markdown(
-            "**Continuous realtime path.** Load a humanoid VRM and animate its face and limbs from the webcam. "
+            "**This is the 3D webcam-tracking workspace.** Load a humanoid VRM or a locally rigged GLB to animate its "
+            "head, chest, shoulders, arms, wrists, and visible fingers from the webcam. "
             "For continuous photo-portrait output instead, launch `camera.bat` "
             "with `--paste_back --virtual_camera`; the Portrait workspace renders recorded clips. "
             "Camera frames stay in the browser. The tracker and avatar libraries "
@@ -1143,11 +1144,17 @@ with gr.Blocks(
         )
 
         gr.Markdown(
-            "### Local photo-to-3D preview\n"
-            "Generate a textured GLB locally with Stable Fast 3D. This does not "
-            "send your photo to a 3D service. You can then bind it locally with "
-            "the free Blender app. Use an upright, full-body photo; the fit is "
-            "approximate and facial expressions are not generated. Windows setup and model access are required; "
+            "### Use one photo to make a 3D avatar that follows your upper body\n"
+            "For your own avatar, choose one upright photo that shows the head, torso, both shoulders, "
+            "forearms, and hands. Generate the textured GLB locally, then rig it with Blender below. "
+            "Download the rigged GLB, choose it in **Choose local VRM / VRM GLB** above, and start webcam tracking. "
+            "The 3D tracker moves the rigged head, chest, upper/lower arms and wrists; it can animate fingers "
+            "only when the rig has matching finger bones. Keep your hands visible to the webcam.\n\n"
+            "**Important limits:** the current 2D portrait mode does not have moving hands. A single photo "
+            "cannot reveal hidden body parts; the generated mesh and automatic rig are approximate, and "
+            "a generated mesh may bend poorly or lack usable hand/finger geometry. Face expressions depend "
+            "on the rig. This is not yet a verified, highly realistic or accurately fitted avatar. "
+            "This local workflow does not send your photo to a 3D service. Windows setup and model access are required; "
             "see `LOCAL_PHOTO_3D_WINDOWS.md`."
         )
         with gr.Row():
