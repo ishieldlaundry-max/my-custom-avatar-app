@@ -17,8 +17,7 @@ from omegaconf import OmegaConf
 from src.pipelines.gradio_live_portrait_pipeline import GradioLivePortraitPipeline
 from src.pipelines.local_photo_to_3d import (
     LocalPhotoTo3DError,
-    generate_local_photo_mesh,
-    rig_local_photo_mesh,
+    generate_rigged_local_photo_avatar,
 )
 from src.pipelines.full_body_animation_pipeline import (
     FullBodyAnimationCancelled,
@@ -243,13 +242,20 @@ def validate_full_body_inputs(source_image, driving_video):
 
 
 def generate_local_photo_avatar(source_image, texture_resolution):
-    """Create a local, textured GLB from one reference photo."""
+    """Create and rig a local photo avatar as one user-facing operation."""
     if not source_image:
         raise gr.Error("Upload a reference photo first.", duration=8)
     try:
-        result = generate_local_photo_mesh(source_image, texture_resolution)
+        result = generate_rigged_local_photo_avatar(
+            source_image,
+            texture_resolution,
+        )
     except LocalPhotoTo3DError as exc:
-        raise gr.Error(str(exc), duration=30) from exc
+        return (
+            None,
+            None,
+            "### Avatar preparation did not finish\n\n" + str(exc),
+        )
     peak_memory = (
         f" Peak model-allocated VRAM: {result.peak_allocated_vram_mb:.0f} MB."
         if result.peak_allocated_vram_mb is not None
@@ -258,32 +264,15 @@ def generate_local_photo_avatar(source_image, texture_resolution):
     return (
         result.model_path,
         result.model_path,
-        f"Created a local textured mesh at {texture_resolution}px. "
-        f"Elapsed: {result.elapsed_seconds:.1f}s.{peak_memory} "
+        f"**Your photo avatar is prepared and loaded in the live preview below.** "
+        f"Reconstruction: {result.reconstruction_seconds:.1f}s at "
+        f"{texture_resolution}px.{peak_memory} "
         "This is model-allocated memory, not total GPU memory. "
-        "Next, optionally use the local Blender rigging step below. "
-        "Use a clear, upright full-body reference for the best automatic fit.",
+        "The model and rig are prepared locally; no separate Blender action or GLB "
+        "reload is needed. Select **Start webcam tracking** in the live preview. "
+        "Use one clear, upright full-body photo with the face, arms, and legs visible. "
+        "A single photo cannot recover hidden sides or guarantee natural joint bending.",
     )
-
-
-def rig_local_photo_avatar(mesh_file):
-    """Rig the generated GLB locally while preserving its imported materials."""
-    if not mesh_file:
-        raise gr.Error("Generate a textured GLB first.", duration=8)
-    try:
-        rigged_path = rig_local_photo_mesh(mesh_file)
-    except LocalPhotoTo3DError as exc:
-        raise gr.Error(str(exc), duration=30) from exc
-    return (
-        rigged_path,
-        rigged_path,
-        "Created a skinned humanoid GLB with local Blender. "
-        "If automatic weighting failed, approximate body weights were used; "
-        "joint bending may need manual adjustment and fallback fingers do not articulate. "
-        "The textured mesh is preserved. Head and body tracking are available; "
-        "single-photo meshes do not gain realistic facial expressions or hidden geometry.",
-    )
-
 
 
 def change_animal_model(is_animal):
@@ -1131,62 +1120,50 @@ with gr.Blocks(
 
     with gr.Accordion("Live 3D avatar (prototype)", open=True, elem_id="live-avatar-page"):
         gr.Markdown(
-            "**This is the 3D webcam-tracking workspace.** Load a humanoid VRM or a locally rigged GLB to animate its "
-            "head, chest, shoulders, arms, wrists, and visible fingers from the webcam. "
-            "For continuous photo-portrait output instead, launch `camera.bat` "
-            "with `--paste_back --virtual_camera`; the Portrait workspace renders recorded clips. "
-            "Camera frames stay in the browser. The tracker and avatar libraries "
-            "are downloaded from their public CDNs on first use."
+            "**Create your live avatar from one photo.** The app reconstructs a textured "
+            "model and prepares its humanoid animation automatically; you do not need to "
+            "open Blender or reload a rigged file. Camera frames stay in the browser. "
+            "The tracker and avatar libraries are downloaded from their public CDNs on first use."
         )
-        gr.HTML(
-            '<iframe title="Live 3D avatar" src="/gradio_api/file=assets/live_avatar.html" '
-            'style="display:block;width:100%;height:760px;border:0;border-radius:14px;" '
-            'allow="camera; fullscreen" loading="lazy"></iframe>'
-        )
-
         gr.Markdown(
-            "### Use one full-body photo to make a 3D avatar that follows your movement\n"
-            "Choose one upright, head-to-toe photo of one person. Keep the face clearly visible, "
-            "with arms and legs unobstructed and a little space between the arms and torso. "
-            "A higher-resolution photo helps preserve face detail. Generate the textured GLB locally, "
-            "then rig it with Blender below. Download the rigged GLB, choose it in **Choose local VRM / VRM GLB** above, "
-            "and start webcam tracking. The webcam tracker rotates the rigged head, chest, arms, and legs in place; "
-            "it does not yet reproduce walking or full-body/foot translation. Hand and finger motion depends on visible hands "
-            "and matching rig bones.\n\n"
-            "**Important limits:** one photo cannot show the person’s hidden sides or back. The generated mesh "
-            "and automatic rig are approximate; joints may bend poorly and hand/finger geometry may be limited. "
-            "Face expressions depend on the rig. This is not yet a verified, highly realistic or accurately fitted avatar. "
-            "This local workflow does not send your photo to a 3D service. Windows setup and model access are required; "
-            "see `LOCAL_PHOTO_3D_WINDOWS.md`."
+            "### 1. Upload one full-body photo\n"
+            "Choose an upright photo of one person with the face clearly visible and the "
+            "arms and legs unobstructed. The app creates the textured model and its "
+            "humanoid rig in one operation, then loads it into the live preview below. "
+            "This local workflow does not send your photo to a 3D service.\n\n"
+            "**Limits:** a single photo cannot show hidden sides or back. The generated "
+            "shape and automatic joint weights are approximate; the first version tracks "
+            "pose in place rather than walking or moving the feet through the room. "
+            "Facial expressions and fingers depend on the generated model and its rig."
         )
         with gr.Row():
             photo_avatar_source = gr.Image(
                 type="filepath",
-                label="Reference photo",
+                label="Full-body reference photo",
             )
             photo_avatar_texture_resolution = gr.Dropdown(
                 choices=[512, 768, 1024],
                 value=512,
-                label="Texture resolution",
+                label="Texture detail",
                 info="512 is the low-memory starting point; higher values preserve more texture detail.",
             )
         gr.Markdown(
-            "The model uses about 6 GB VRAM at its default setting. "
+            "Local NVIDIA model use is about 6 GB VRAM at the default setting. "
             "512px lowers texture memory and file size, but does not reduce "
             "the shape model's full inference memory. Stop webcam tracking and "
             "close GPU-heavy apps before generating."
         )
         photo_avatar_generate = gr.Button(
-            "GENERATE LOCAL TEXTURED MESH",
-            variant="secondary",
+            "CREATE & LOAD MY LIVE AVATAR",
+            variant="primary",
         )
         with gr.Row():
             photo_avatar_model = gr.Model3D(
-                label="Generated textured model preview",
+                label="Prepared avatar preview",
                 height=480,
             )
             photo_avatar_file = gr.File(
-                label="Download generated GLB",
+                label="Download prepared avatar GLB",
             )
         photo_avatar_status = gr.Markdown()
         photo_avatar_generate.click(
@@ -1195,28 +1172,43 @@ with gr.Blocks(
             outputs=[photo_avatar_model, photo_avatar_file, photo_avatar_status],
             show_progress=True,
         )
-        photo_avatar_rig_button = gr.Button(
-            "RIG GENERATED GLB LOCALLY WITH BLENDER",
-            variant="secondary",
-        )
-        with gr.Row():
-            photo_avatar_rig_model = gr.Model3D(
-                label="Humanoid-rigged textured GLB preview",
-                height=480,
-            )
-            photo_avatar_rig_file = gr.File(
-                label="Download rigged GLB",
-            )
-        photo_avatar_rig_status = gr.Markdown()
-        photo_avatar_rig_button.click(
-            fn=rig_local_photo_avatar,
+        photo_avatar_file.change(
+            fn=None,
             inputs=[photo_avatar_file],
-            outputs=[
-                photo_avatar_rig_model,
-                photo_avatar_rig_file,
-                photo_avatar_rig_status,
-            ],
-            show_progress=True,
+            outputs=[],
+            js=r"""(fileValue) => {
+              const file = Array.isArray(fileValue) ? fileValue[0] : fileValue;
+              if (!file?.url) return [];
+              const frame = document.getElementById("live-avatar-frame");
+              if (!frame?.contentWindow) return [];
+              const modelUrl = new URL(file.url, window.location.href);
+              if (
+                modelUrl.origin !== window.location.origin ||
+                !modelUrl.pathname.startsWith("/gradio_api/file=")
+              ) return [];
+              frame.contentWindow.postMessage(
+                {
+                  type: "load-photo-avatar",
+                  url: modelUrl.href,
+                  label: file.orig_name || "Prepared photo avatar"
+                },
+                window.location.origin
+              );
+              return [];
+            }""",
+        )
+        gr.Markdown(
+            "### 2. Start webcam tracking\n"
+            "The prepared avatar loads automatically after creation. Press **Start webcam tracking** "
+            "in the preview to grant camera access and begin movement tracking. The webcam tracker "
+            "animates the avatar's head, chest, arms, and legs in place; the camera cannot recover "
+            "hidden joints or true depth."
+        )
+        gr.HTML(
+            '<iframe id="live-avatar-frame" title="Live 3D avatar" '
+            'src="/gradio_api/file=assets/live_avatar.html" '
+            'style="display:block;width:100%;height:760px;border:0;border-radius:14px;" '
+            'allow="camera; fullscreen" loading="eager"></iframe>'
         )
 
     with gr.Accordion("Offline full-body animation", open=True, elem_id="full-body-page"):
