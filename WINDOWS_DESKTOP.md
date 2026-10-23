@@ -29,6 +29,27 @@ Collect main-environment versions and available providers before choosing GPU
 packages. A driver alone is not sufficient; ORT must load its CUDA libraries.
 Some ONNX graphs may be rejected by the strict no-CPU-operators policy.
 
+### Volumetric warping compatibility
+
+The portrait warping checkpoint uses two 5-D GridSample operations. ONNX Runtime
+CUDA can load this model but fail on the first frame with "Only 4-D tensor is
+supported". The CUDA warping adapter splits the existing checkpoint in memory,
+runs those sampling operations in PyTorch CUDA, and runs the other stages in
+ONNX CUDA with CPU fallback disabled. Intermediate tensors stay on CUDA using
+explicit I/O binding and stream synchronization. No new model downloads,
+TensorRT plugins, package reinstalls, or executable rebuild are needed.
+
+The startup log identifies this path as "ONNX CUDA + PyTorch CUDA GridSample".
+CPU numerical comparison validates the graph partition and sampling semantics;
+it does not establish Windows CUDA speed, memory usage, or successful rendering.
+On NVIDIA hardware, run the real-checkpoint CUDA regression with:
+
+```bat
+venv\Scripts\python.exe -m unittest discover -s tests -p test_cuda_warping.py -v
+```
+
+The CUDA regression is skipped when NVIDIA hardware or the checkpoint is absent.
+
 Windows, not the app, selects Intel versus NVIDIA for WebView/browser graphics.
 In Windows Settings > System > Display > Graphics, select AvatarDesktop.exe
 and choose High performance (NVIDIA). Use the same preference for your browser
