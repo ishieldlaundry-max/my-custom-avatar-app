@@ -6,9 +6,12 @@ import struct
 import pytest
 
 from src.pipelines.local_photo_to_3d import (
+    LocalPhotoAvatarResult,
+    LocalPhotoMeshResult,
     LocalPhotoTo3DError,
     find_blender_executable,
     generate_local_photo_mesh,
+    generate_rigged_local_photo_avatar,
     rig_local_photo_mesh,
     sf3d_python_path,
     validate_texture_resolution,
@@ -115,6 +118,82 @@ def test_rig_validation_reports_failed_checks_and_keeps_candidate(monkeypatch, t
     assert str(candidate) in message
     assert candidate.is_file()
     assert source.is_file()
+
+
+def test_photo_avatar_generation_automatically_rigs_the_mesh(monkeypatch, tmp_path):
+    import src.pipelines.local_photo_to_3d as pipeline
+
+    source_image = tmp_path / "portrait.jpg"
+    source_mesh = tmp_path / "mesh.glb"
+    rigged_model = tmp_path / "mesh_rigged.glb"
+    source_image.write_bytes(b"image")
+    source_mesh.write_bytes(b"mesh")
+    rigged_model.write_bytes(b"rigged")
+    calls = []
+
+    def fake_generate(image, resolution, **kwargs):
+        calls.append(("generate", image, resolution, kwargs))
+        return LocalPhotoMeshResult(str(source_mesh), 42.5, 6144.0)
+
+    def fake_rig(model, **kwargs):
+        calls.append(("rig", model, kwargs))
+        return str(rigged_model)
+
+    monkeypatch.setattr(pipeline, "generate_local_photo_mesh", fake_generate)
+    monkeypatch.setattr(pipeline, "rig_local_photo_mesh", fake_rig)
+
+    result = generate_rigged_local_photo_avatar(
+        source_image,
+        768,
+        sf3d_root=tmp_path / "sf3d",
+        python_path=tmp_path / "python.exe",
+        blender_path=tmp_path / "blender.exe",
+    )
+
+    assert result == LocalPhotoAvatarResult(
+        model_path=str(rigged_model),
+        source_mesh_path=str(source_mesh),
+        reconstruction_seconds=42.5,
+        peak_allocated_vram_mb=6144.0,
+    )
+    assert calls[0][0:3] == ("generate", source_image, 768)
+    assert calls[1][0:2] == ("rig", str(source_mesh))
+    assert calls[1][2]["blender_path"] == tmp_path / "blender.exe"
+
+
+def test_automatic_photo_rigging_error_preserves_the_generated_mesh(monkeypatch, tmp_path):
+    import src.pipelines.local_photo_to_3d as pipeline
+
+    source_mesh = tmp_path / "mesh.glb"
+    candidate = tmp_path / "mesh_rigged.glb"
+    source_mesh.write_bytes(b"mesh")
+    candidate.write_bytes(b"candidate")
+    monkeypatch.setattr(
+        pipeline,
+        "generate_local_photo_mesh",
+        lambda *_args, **_kwargs: LocalPhotoMeshResult(
+            str(source_mesh), 12.0, None
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "rig_local_photo_mesh",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            LocalPhotoTo3DError(
+                f"rig validation failed; candidate file was kept at {candidate}"
+            )
+        ),
+    )
+
+    with pytest.raises(LocalPhotoTo3DError) as exc_info:
+        generate_rigged_local_photo_avatar(tmp_path / "portrait.jpg")
+
+    message = str(exc_info.value)
+    assert "automatic avatar preparation could not finish" in message
+    assert str(source_mesh) in message
+    assert str(candidate) in message
+    assert source_mesh.is_file()
+    assert candidate.is_file()
 
 
 def make_glb(path, *, skinned):
