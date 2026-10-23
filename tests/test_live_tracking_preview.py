@@ -53,6 +53,41 @@ def test_close_either_window_stops(ui):
     assert not controller.poll()
 
 
+@pytest.mark.parametrize("key", ["c", "h", "s", "b", "l", "q"])
+def test_buttons_dispatch_existing_actions(ui, key):
+    controller, cv = ui
+    controller.add_controls(np.zeros((480, 640, 3), np.uint8))
+    bounds, _, label = next(b for b in controller.buttons if b[1] == ord(key))
+    left, top, right, bottom = bounds
+    controller._on_mouse(cv.EVENT_LBUTTONDOWN, (left + right) // 2,
+                         (top + bottom) // 2, None, None)
+    assert controller.poll() is (key != "q")
+    assert controller.last_key == ord(key)
+    if key == "c":
+        assert controller.calibration_requested
+    if key == "h":
+        assert not controller.head_enabled
+
+
+def test_toolbar_click_does_not_select_shoulder(ui):
+    controller, cv = ui
+    controller.effects = MagicMock()
+    controller.add_controls(np.zeros((360, 640, 3), np.uint8))
+    controller._on_mouse(cv.EVENT_LBUTTONDOWN, 20, 375, None, None)
+    controller.effects._driver_click.assert_not_called()
+    controller._on_mouse(cv.EVENT_LBUTTONDOWN, 50, 200, None, None)
+    controller.effects._driver_click.assert_called_once()
+
+
+def test_buttons_follow_camera_height_and_show_toggle_state(ui):
+    controller, cv = ui
+    controller.head_enabled = False
+    image = controller.add_controls(np.zeros((720, 640, 3), np.uint8))
+    assert image.shape == (852, 640, 3)
+    assert all(bounds[1] >= 720 for bounds, _, _ in controller.buttons)
+    assert any("Head: OFF" in label for _, _, label in controller.buttons)
+
+
 def test_source_is_explicit(tmp_path):
     assert preview.resolve_camera_source("0") == (True, 0)
     assert preview.resolve_camera_source("2") == (True, 2)
