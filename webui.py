@@ -1145,16 +1145,17 @@ with gr.Blocks(
         )
 
         gr.Markdown(
-            "### Use one photo to make a 3D avatar that follows your upper body\n"
-            "For your own avatar, choose one upright photo that shows the head, torso, both shoulders, "
-            "forearms, and hands. Generate the textured GLB locally, then rig it with Blender below. "
-            "Download the rigged GLB, choose it in **Choose local VRM / VRM GLB** above, and start webcam tracking. "
-            "The 3D tracker moves the rigged head, chest, upper/lower arms and wrists; it can animate fingers "
-            "only when the rig has matching finger bones. Keep your hands visible to the webcam.\n\n"
-            "**Important limits:** the current 2D portrait mode does not have moving hands. A single photo "
-            "cannot reveal hidden body parts; the generated mesh and automatic rig are approximate, and "
-            "a generated mesh may bend poorly or lack usable hand/finger geometry. Face expressions depend "
-            "on the rig. This is not yet a verified, highly realistic or accurately fitted avatar. "
+            "### Use one full-body photo to make a 3D avatar that follows your movement\n"
+            "Choose one upright, head-to-toe photo of one person. Keep the face clearly visible, "
+            "with arms and legs unobstructed and a little space between the arms and torso. "
+            "A higher-resolution photo helps preserve face detail. Generate the textured GLB locally, "
+            "then rig it with Blender below. Download the rigged GLB, choose it in **Choose local VRM / VRM GLB** above, "
+            "and start webcam tracking. The webcam tracker rotates the rigged head, chest, arms, and legs in place; "
+            "it does not yet reproduce walking or full-body/foot translation. Hand and finger motion depends on visible hands "
+            "and matching rig bones.\n\n"
+            "**Important limits:** one photo cannot show the person’s hidden sides or back. The generated mesh "
+            "and automatic rig are approximate; joints may bend poorly and hand/finger geometry may be limited. "
+            "Face expressions depend on the rig. This is not yet a verified, highly realistic or accurately fitted avatar. "
             "This local workflow does not send your photo to a 3D service. Windows setup and model access are required; "
             "see `LOCAL_PHOTO_3D_WINDOWS.md`."
         )
