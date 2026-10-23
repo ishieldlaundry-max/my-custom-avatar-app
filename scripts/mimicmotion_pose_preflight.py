@@ -59,16 +59,31 @@ def select_sample_indices(
 
 def inspect_video(video_path: Path, backend_root: Path, max_samples: int) -> dict:
     started_at = time.perf_counter()
+    print(
+        "DWPose setup: importing CPU dependencies.",
+        file=sys.stderr,
+        flush=True,
+    )
     sys.path.insert(0, str(backend_root))
     import decord
     import torch
     from mimicmotion.dwpose.dwpose_detector import DWposeDetector
 
     model_dir = backend_root / "models" / "DWPose"
+    print(
+        "DWPose setup: loading CPU detector models.",
+        file=sys.stderr,
+        flush=True,
+    )
     detector = DWposeDetector(
         model_det=str(model_dir / "yolox_l.onnx"),
         model_pose=str(model_dir / "dw-ll_ucoco_384.onnx"),
         device="cpu",
+    )
+    print(
+        "DWPose setup: opening driver video.",
+        file=sys.stderr,
+        flush=True,
     )
     reader = decord.VideoReader(str(video_path), ctx=decord.cpu(0))
     frame_count = len(reader)
@@ -79,6 +94,11 @@ def inspect_video(video_path: Path, backend_root: Path, max_samples: int) -> dic
     except (AttributeError, TypeError, ValueError):
         fps = None
     sample_indices = select_sample_indices(frame_count, fps, max_samples)
+    print(
+        f"DWPose setup: processing {len(sample_indices)} CPU samples.",
+        file=sys.stderr,
+        flush=True,
+    )
 
     sampled_results = []
     with torch.inference_mode():
