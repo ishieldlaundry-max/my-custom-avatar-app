@@ -69,6 +69,54 @@ def test_buttons_dispatch_existing_actions(ui, key):
         assert not controller.head_enabled
 
 
+def test_clean_room_button_requests_background_capture(ui):
+    controller, cv = ui
+    controller.allow_background_capture = True
+    controller.add_controls(np.zeros((480, 640, 3), np.uint8))
+    bounds, _, _ = next(button for button in controller.buttons if button[1] == ord("g"))
+    left, top, right, bottom = bounds
+
+    controller._on_mouse(
+        cv.EVENT_LBUTTONDOWN,
+        (left + right) // 2,
+        (top + bottom) // 2,
+        None,
+        None,
+    )
+
+    assert controller.poll()
+    assert controller.background_capture_requested
+    assert "Stay out of frame" in controller.status
+
+
+def test_clean_room_capture_uses_a_median_of_camera_frames(ui, monkeypatch):
+    controller, _ = ui
+    controller.show_camera = MagicMock()
+    controller.poll = MagicMock(return_value=True)
+    frames = [np.full((4, 4, 3), value, np.uint8) for value in (10, 240, 20)]
+    capture = NS(read=MagicMock(side_effect=[(True, frames[1]), (True, frames[2])]))
+    captured = {}
+
+    def median(frame_list, target_shape):
+        captured["frames"] = frame_list
+        captured["target_shape"] = target_shape
+        return np.median(np.stack(frame_list), axis=0).astype(np.uint8)
+
+    monkeypatch.setattr(preview, "median_clean_background", median)
+    background = controller.capture_clean_background(
+        capture,
+        frames[0],
+        (4, 4),
+        sample_count=3,
+        sample_interval=0,
+    )
+
+    assert len(captured["frames"]) == 3
+    assert captured["target_shape"] == (4, 4)
+    assert np.all(background == 20)
+    assert capture.read.call_count == 2
+
+
 def test_toolbar_click_does_not_select_shoulder(ui):
     controller, cv = ui
     controller.effects = MagicMock()
@@ -147,3 +195,95 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
     assert calls == [(1, True), (2, False), (3, True)]
     reader.close.assert_called_once()
     assert any(call.args[0] == "Your camera" for call in cv.imshow.call_args_list)
+
+
+def test_live_driver_background_captures_room_before_tracking(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(preview.time, "sleep", lambda _seconds: None)
+    root = Path(__file__).resolve().parents[1]
+    module = ast.parse((root / "run.py").read_text())
+    function = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "run_with_video"
+    )
+    frames = [np.full((8, 8, 3), index, np.uint8) for index in range(1, 10)]
+    reader = MagicMock()
+    reader.start.return_value = reader
+    reader.read.side_effect = [(True, frame) for frame in frames]
+    cv = MagicMock()
+    cv.VideoCapture.return_value.get.return_value = 30
+    cv.getWindowProperty.return_value = 1
+    cv.waitKey.side_effect = [ord("g"), *([-1] * 6), ord("c"), ord("q")]
+    cv.flip.side_effect = lambda frame, _axis: frame.copy()
+    cv.resize.side_effect = lambda frame, _size: frame
+    cv.cvtColor.side_effect = lambda frame, _code: frame.copy()
+    monkeypatch.setattr(preview, "cv2", cv)
+    monkeypatch.setattr(effects, "cv2", cv)
+
+    pipe = NS(
+        src_imgs=[frames[0]],
+        src_infos=[[[{}, np.array([[2, 2], [6, 6]])]]],
+        src_lmk_pre="stale",
+        is_source_video=False,
+    )
+    pipe.prepare_source = lambda *args, **kwargs: True
+    rendered_frames = []
+
+    def render(frame, *args, **kwargs):
+        rendered_frames.append(int(frame[0, 0, 0]))
+        pipe.src_lmk_pre = "old landmarks"
+        return frame, frame, frame, [
+            {key: np.zeros((1, 1)) for key in ("pitch", "yaw", "roll")}
+        ]
+
+    pipe.run = render
+    composited_backgrounds = []
+
+    def composite(target, background, alpha):
+        composited_backgrounds.append(background.copy())
+        return target.copy()
+
+    namespace = dict(
+        Fore=NS(RED=""),
+        Style=NS(RESET_ALL=""),
+        OmegaConf=NS(load=lambda _: NS(infer_params=NS(flag_pasteback=True))),
+        FasterLivePortraitPipeline=lambda **_: pipe,
+        resolve_camera_source=preview.resolve_camera_source,
+        LiveTrackingPreview=preview.LiveTrackingPreview,
+        LivePortraitEffects=effects.LivePortraitEffects,
+        LatestFrameCapture=lambda _capture: reader,
+        RollingRealtimeMetrics=None,
+        DriverBackgroundError=RuntimeError,
+        extract_target_alpha=lambda _path, shape: np.ones(shape, dtype=np.float32),
+        composite_target_over_driver_background=composite,
+        VirtualCameraBroadcaster=None,
+        cv2=cv,
+        np=np,
+        os=__import__("os"),
+        time=time,
+        datetime=datetime,
+        deque=deque,
+    )
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "run.py", "exec"),
+        namespace,
+    )
+    namespace["run_with_video"](
+        NS(
+            cfg="unused",
+            paste_back=True,
+            animal=False,
+            src_image="target.png",
+            realtime=True,
+            dri_video="0",
+            virtual_camera=False,
+            realtime_metrics=False,
+            use_driver_background=True,
+        )
+    )
+
+    assert rendered_frames == [8]
+    assert len(composited_backgrounds) == 1
+    assert np.all(composited_backgrounds[0] == 4)
+    reader.close.assert_called_once()
