@@ -85,6 +85,14 @@ Use the native App > Start live portrait from photo menu, choose a portrait,
 and confirm closing the workspace server to free its GPU memory. The live
 portrait opens in a separate OpenCV window. This is continuous capture, unlike
 the workspace's recorded-video input. Close other webcam applications first.
+Live webcam mode also opens a **Your camera** window showing the same input
+frames that drive inference (mirrored for display only). Look straight ahead
+with a relaxed mouth and open eyes, then press **C** in either OpenCV window
+to calibrate. The portrait stays still until calibration. Press **C** again
+to reset the expression reference, or **Q** / Escape to stop. Closing either
+preview window also stops tracking. Face detection is refreshed on every live
+frame; when no face is detected, the portrait pauses and the camera status says
+so. Preview updates are paced by inference, not a promise of 30 FPS.
 Use App > Stop live tracking to stop it. Restart AvatarDesktop to return to
 the workspace after live mode. Closing AvatarDesktop stops its child processes.
 
