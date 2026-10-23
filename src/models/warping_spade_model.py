@@ -17,6 +17,13 @@ class WarpingSpadeModel(BaseModel):
     """
 
     def __init__(self, **kwargs):
+        # ORT's CUDA GridSample kernel rejects the model's 5-D volumes.
+        # Keep CPU-only development and TensorRT paths unchanged.
+        from src.utils.nvidia_runtime import nvidia_required
+        if kwargs.get("predict_type", "trt") == "ort" and (
+            nvidia_required() or torch.cuda.is_available()
+        ):
+            kwargs["cuda_warping"] = True
         super(WarpingSpadeModel, self).__init__(**kwargs)
 
     def input_process(self, *data):
@@ -24,7 +31,7 @@ class WarpingSpadeModel(BaseModel):
         return feature_3d, kp_driving, kp_source
 
     def output_process(self, *data):
-        if self.predict_type != "trt":
+        if not isinstance(data[0], torch.Tensor):
             out = torch.from_numpy(data[0]).to(self.device).float()
         else:
             out = data[0]
