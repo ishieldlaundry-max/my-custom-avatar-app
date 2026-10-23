@@ -8,9 +8,10 @@ on 127.0.0.1. It is a launcher, not a portable bundle of Python, models, or CUDA
 Keep it in the existing FasterLivePortrait-local folder.
 
 Packaging does not improve model quality or inference speed by itself.
-The existing single-photo live path is experimental: strict identity currently
-prioritizes expressions and locks head pose to avoid face distortion. Natural
-head/shoulder motion and likeness remain separate work, not solved by packaging.
+The single-photo live path is experimental. Calibrated head turns are bounded
+to protect likeness. Shoulder movement is a local 2-D image deformation, and
+directional shading is illustrative, not reconstructed 3-D lighting or shadows.
+Packaging alone does not improve motion accuracy.
 
 ## NVIDIA requirement
 
@@ -93,6 +94,31 @@ to reset the expression reference, or **Q** / Escape to stop. Closing either
 preview window also stops tracking. Face detection is refreshed on every live
 frame; when no face is detected, the portrait pauses and the camera status says
 so. Preview updates are paced by inference, not a promise of 30 FPS.
+
+### Head, shoulders and shading
+
+Live webcam mode uses adaptive expression/pose smoothing. Larger changes pass
+through faster than small tremors; this is not a measured accuracy guarantee.
+Head motion starts enabled: **H** toggles it. Relative yaw is limited to 15 degrees,
+pitch/roll to 10 degrees. Target scale, translation and expression bounds remain
+protected; offline rendering retains its existing pose policy.
+
+For shoulder motion, keep your upper body visible and press **S**. Click the two
+shoulders in **Your camera**, then the corresponding two shoulders in **Render**.
+Yellow markers confirm the selections. Stay still while selecting and press **C**
+to calibrate face and shoulders together. Use textured clothing near the shoulder
+points; optical flow cannot reliably track a plain, featureless area. The shoulder
+effect is bounded and fades out above the selected shoulder region. **B** turns
+it off; **S** starts a new selection. Lost tracking freezes the last shoulder
+offset and asks for recalibration, rather than inventing movement.
+
+**L** toggles subtle face-local simulated shading driven by calibrated head
+orientation. It starts enabled. It does not estimate room lighting, reconstruct
+depth, or create physically correct cast shadows on the background. Shoulder
+flow, warping and shading are conventional CPU image processing; all neural
+inference remains under the NVIDIA-only Windows policy. These effects may add
+latency; Windows frame rate and visual fidelity need real-device evaluation.
+
 Use App > Stop live tracking to stop it. Restart AvatarDesktop to return to
 the workspace after live mode. Closing AvatarDesktop stops its child processes.
 
