@@ -39,6 +39,7 @@ from colorama import Fore, Back, Style
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
+from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.realtime_capture import LatestFrameCapture
 
 if platform.system().lower() == 'windows':
@@ -61,17 +62,18 @@ def run_with_video(args):
         raise ValueError("--virtual_camera requires --realtime.")
     if args.virtual_camera and not args.paste_back:
         raise ValueError("--virtual_camera requires --paste_back for a clean composited frame.")
-    is_webcam = not args.dri_video or not os.path.exists(args.dri_video)
+    is_webcam, capture_source = resolve_camera_source(args.dri_video)
     if is_webcam:
         # read frame from camera if no driving video input
-        vcap = cv2.VideoCapture(0)
+        print(f"Live driver: camera {capture_source}", flush=True)
+        vcap = cv2.VideoCapture(capture_source)
         vcap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         vcap.set(cv2.CAP_PROP_FPS, 30)
         if not vcap.isOpened():
             print("no camera found! exit!")
             exit(1)
     else:
-        vcap = cv2.VideoCapture(args.dri_video)
+        vcap = cv2.VideoCapture(capture_source)
     fps = int(vcap.get(cv2.CAP_PROP_FPS))
     if fps <= 0:
         fps = 30
@@ -109,7 +111,11 @@ def run_with_video(args):
     c_lip_lst = []
 
     frame_ind = 0
+    live_preview = None
     try:
+        if args.realtime and is_webcam:
+            live_preview = LiveTrackingPreview(capture_source)
+            cv2.imshow("Render", cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR))
         while realtime_capture is not None or vcap.isOpened():
             if realtime_capture is not None:
                 ret, frame = realtime_capture.read(timeout=1.0)
@@ -121,8 +127,19 @@ def run_with_video(args):
                 ret, frame = vcap.read()
             if not ret:
                 break
+            if live_preview is not None:
+                live_preview.show_camera(frame)
+                if not live_preview.poll():
+                    break
+                if not live_preview.ready:
+                    continue
+                # Re-detect rather than following stale landmarks on the background.
+                # This also reacquires the face after it leaves the camera view.
+                pipe.src_lmk_pre = None
             t0 = time.time()
-            first_frame = frame_ind == 0
+            first_frame = frame_ind == 0 or (
+                live_preview is not None and live_preview.needs_reference
+            )
             dri_crop, out_crop, out_org, dri_motion_info = pipe.run(
                 frame,
                 pipe.src_imgs[0],
@@ -131,6 +148,9 @@ def run_with_video(args):
                 realtime=args.realtime,
             )
             frame_ind += 1
+            if live_preview is not None:
+                live_preview.tracking_result(out_crop is not None)
+                live_preview.show_camera(frame)
             if out_crop is None:
                 print(f"no face in driving frame:{frame_ind}")
                 continue
@@ -159,7 +179,7 @@ def run_with_video(args):
                     out_crop = np.concatenate([dri_crop, out_crop], axis=1)
                     out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
                     cv2.imshow('Render', out_crop)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if live_preview is None and cv2.waitKey(1) & 0xFF == ord('q'):
                     break
     except BaseException:
         if realtime_capture is not None:
