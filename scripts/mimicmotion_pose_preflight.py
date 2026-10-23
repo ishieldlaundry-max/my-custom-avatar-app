@@ -67,8 +67,6 @@ def inspect_video(video_path: Path, backend_root: Path, max_samples: int) -> dic
     sys.path.insert(0, str(backend_root))
     print("DWPose setup: importing decord.", file=sys.stderr, flush=True)
     import decord
-    print("DWPose setup: importing PyTorch.", file=sys.stderr, flush=True)
-    import torch
     print("DWPose setup: importing DWPose detector.", file=sys.stderr, flush=True)
     from mimicmotion.dwpose.dwpose_detector import DWposeDetector
 
@@ -104,27 +102,26 @@ def inspect_video(video_path: Path, backend_root: Path, max_samples: int) -> dic
     )
 
     sampled_results = []
-    with torch.inference_mode():
-        for sample_index, frame_index in enumerate(sample_indices, start=1):
-            frame = reader[int(frame_index)].asnumpy()
-            pose = detector(frame)
-            subset = pose["bodies"]["subset"]
-            people = []
-            for person in subset:
-                missing = [
-                    name
-                    for landmark_id, name in REQUIRED_BODY_LANDMARKS.items()
-                    if landmark_id >= len(person) or person[landmark_id] < 0
-                ]
-                people.append({"missing_landmarks": missing})
-            sampled_results.append(
-                {"frame_index": int(frame_index), "people": people}
-            )
-            print(
-                f"DWPose progress: {sample_index}/{len(sample_indices)}",
-                file=sys.stderr,
-                flush=True,
-            )
+    for sample_index, frame_index in enumerate(sample_indices, start=1):
+        frame = reader[int(frame_index)].asnumpy()
+        pose = detector(frame)
+        subset = pose["bodies"]["subset"]
+        people = []
+        for person in subset:
+            missing = [
+                name
+                for landmark_id, name in REQUIRED_BODY_LANDMARKS.items()
+                if landmark_id >= len(person) or person[landmark_id] < 0
+            ]
+            people.append({"missing_landmarks": missing})
+        sampled_results.append(
+            {"frame_index": int(frame_index), "people": people}
+        )
+        print(
+            f"DWPose progress: {sample_index}/{len(sample_indices)}",
+            file=sys.stderr,
+            flush=True,
+        )
     detector.release_memory()
     return {
         "sample_count": len(sampled_results),
