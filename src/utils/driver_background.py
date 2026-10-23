@@ -100,6 +100,24 @@ def _cover_resize(image: np.ndarray, height: int, width: int) -> np.ndarray:
     return resized[top : top + height, left : left + width]
 
 
+def median_clean_background(
+    frames: list[np.ndarray], target_shape: tuple[int, int]
+) -> np.ndarray:
+    """Build a stable BGR room plate from frames captured while the room is empty."""
+    if not frames:
+        raise DriverBackgroundError("No webcam frames were captured for the room background.")
+    height, width = target_shape
+    if height < 1 or width < 1:
+        raise DriverBackgroundError("The clean background dimensions are invalid.")
+
+    normalized = []
+    for frame in frames:
+        if frame.ndim != 3 or frame.shape[2] != 3:
+            raise DriverBackgroundError("The webcam background must be a color image.")
+        normalized.append(_cover_resize(frame, height, width))
+    return np.median(np.stack(normalized, axis=0), axis=0).astype(np.uint8)
+
+
 def composite_target_over_driver_background(
     target_rgb: np.ndarray,
     driver_bgr: np.ndarray,
