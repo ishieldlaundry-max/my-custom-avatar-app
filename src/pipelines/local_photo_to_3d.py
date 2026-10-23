@@ -173,10 +173,33 @@ def rig_local_photo_mesh(
         or output_image_count < source_image_count
         or output_texture_count < source_texture_count
     ):
-        output.unlink(missing_ok=True)
+        validation_issues = []
+        if not has_skin:
+            validation_issues.append("the exported GLB has no skin")
+        if not has_weighted_mesh:
+            validation_issues.append(
+                "no exported mesh has both JOINTS_0 and WEIGHTS_0 attributes"
+            )
+        missing_joints = sorted(required_joints - output_joint_names)
+        if missing_joints:
+            validation_issues.append(
+                "required humanoid joints are missing: " + ", ".join(missing_joints)
+            )
+        if output_image_count < source_image_count:
+            validation_issues.append(
+                f"embedded image count decreased from {source_image_count} "
+                f"to {output_image_count}"
+            )
+        if output_texture_count < source_texture_count:
+            validation_issues.append(
+                f"embedded texture count decreased from {source_texture_count} "
+                f"to {output_texture_count}"
+            )
         raise LocalPhotoTo3DError(
-            "Blender's GLB did not contain a skinned mesh with preserved embedded "
-            "textures. The original textured GLB is unchanged."
+            "Blender produced a GLB, but rig validation failed: "
+            + "; ".join(validation_issues)
+            + f". The candidate file was kept at {output}. "
+            "The original textured GLB is unchanged."
         )
     return str(output)
 
