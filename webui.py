@@ -24,6 +24,7 @@ from src.pipelines.full_body_animation_pipeline import (
     FullBodyAnimationError,
     FullBodyAnimationPipeline,
     FullBodyRenderOptions,
+    extract_driver_preview_frames,
     inspect_full_body_inputs,
 )
 
@@ -237,8 +238,15 @@ def cancel_full_body_animation():
 
 
 def validate_full_body_inputs(source_image, driving_video):
-    """Return the preflight report without starting generation."""
-    return inspect_full_body_inputs(source_image, driving_video).to_markdown()
+    """Return input checks and lightweight driver previews before rendering."""
+    report = inspect_full_body_inputs(source_image, driving_video)
+    previews = extract_driver_preview_frames(driving_video)
+    preview_note = (
+        ""
+        if previews or not driving_video
+        else "\n\n- Driver frames could not be decoded. Re-encode the clip as a playable MP4."
+    )
+    return report.to_markdown() + preview_note, source_image, previews
 
 
 def generate_local_photo_avatar(source_image, texture_resolution):
@@ -1236,6 +1244,26 @@ with gr.Blocks(
             full_body_validation_status = gr.Markdown(
                 "Run the input check before starting the GPU render.",
             )
+        with gr.Row():
+            full_body_target_preview = gr.Image(
+                label="Full-body target — check head, hands, feet, clothing, and margins",
+                height=320,
+                interactive=False,
+            )
+            full_body_driver_preview = gr.Gallery(
+                label="Driver moments across the clip — select a frame to enlarge",
+                height=320,
+                columns=4,
+                allow_preview=True,
+                object_fit="contain",
+                type="numpy",
+                interactive=False,
+            )
+        gr.Markdown(
+            "Up to four evenly spaced frames are shown across the driver clip; select "
+            "any frame to inspect it at full size. Frames are scaled down only for "
+            "display. Compare them with the target before rendering."
+        )
         full_body_confirm_framing = gr.Checkbox(
             label=(
                 "I confirm the target shows the head, full body, and both hands, "
@@ -1498,8 +1526,12 @@ with gr.Blocks(
     full_body_check_button.click(
         fn=validate_full_body_inputs,
         inputs=[full_body_source_image, full_body_driving_video],
-        outputs=[full_body_validation_status],
-        show_progress=False,
+        outputs=[
+            full_body_validation_status,
+            full_body_target_preview,
+            full_body_driver_preview,
+        ],
+        show_progress=True,
     )
 
 

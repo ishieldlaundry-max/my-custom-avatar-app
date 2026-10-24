@@ -8,6 +8,7 @@ its own PyTorch/diffusers environment and model checkpoints.
 from __future__ import annotations
 
 import json
+import math
 import os
 import platform
 import subprocess
@@ -213,6 +214,87 @@ def inspect_full_body_inputs(
         driver_duration_seconds=driver_duration,
         warnings=tuple(warnings),
     )
+
+
+def _prepare_driver_preview_frame(frame, max_edge: int, cv2, np):
+    height, width = frame.shape[:2]
+    scale = min(1.0, max_edge / max(height, width))
+    if scale < 1:
+        frame = cv2.resize(
+            frame,
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8, copy=False)
+
+
+def extract_driver_preview_frames(
+    driving_video: str | Path | None,
+    max_frames: int = 4,
+    max_edge: int = 960,
+):
+    """Decode evenly spaced driver moments without loading render models."""
+    if not driving_video:
+        return []
+    video_path = Path(driving_video)
+    if not video_path.is_file():
+        return []
+    if max_frames < 1:
+        raise ValueError("The driver preview must request at least one frame.")
+    if max_edge < 1:
+        raise ValueError("The driver preview maximum edge must be positive.")
+
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return []
+
+    try:
+        capture = cv2.VideoCapture(str(video_path))
+        try:
+            if not capture.isOpened():
+                return []
+            raw_frame_count = float(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            frame_count = (
+                max(0, int(raw_frame_count))
+                if math.isfinite(raw_frame_count)
+                else 0
+            )
+            raw_fps = float(capture.get(cv2.CAP_PROP_FPS))
+            fps = raw_fps if math.isfinite(raw_fps) and raw_fps > 0 else None
+
+            sample_count = min(frame_count, max_frames) if frame_count else 1
+            if sample_count == 1:
+                frame_indices = [0]
+            else:
+                frame_indices = sorted(
+                    {
+                        round(index * (frame_count - 1) / (sample_count - 1))
+                        for index in range(sample_count)
+                    }
+                )
+
+            previews = []
+            for frame_index in frame_indices:
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                success, frame = capture.read()
+                if not success or frame is None:
+                    continue
+                preview = _prepare_driver_preview_frame(
+                    frame, max_edge, cv2, np
+                )
+                label = (
+                    f"{frame_index / fps:.1f} s"
+                    if fps is not None
+                    else f"Frame {frame_index + 1}"
+                )
+                previews.append((preview, label))
+            return previews
+        finally:
+            capture.release()
+    except (OSError, ValueError, cv2.error):
+        return []
 
 
 class MimicMotionBackend:
