@@ -549,6 +549,42 @@ body, .gradio-container {
     margin: 0 0 11px;
 }
 
+#voice-shifter label {
+    color: var(--cyber-text);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+}
+
+#voice-shifter select {
+    background: #101b29;
+    border: 1px solid rgba(101, 239, 255, 0.28);
+    border-radius: 9px;
+    color: var(--cyber-text);
+    margin-bottom: 9px;
+    min-height: 40px;
+    padding: 8px 10px;
+    width: 100%;
+}
+
+#voice-shifter select:disabled,
+#voice-shifter button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+#voice-shifter .voice-device-help,
+#voice-shifter .voice-device-status {
+    color: var(--cyber-muted);
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
+#voice-shifter .voice-device-status {
+    margin: 7px 0 10px;
+}
+
 #voice-shifter button {
     background: transparent;
     border: 1px solid var(--cyber-pink);
@@ -634,6 +670,13 @@ AUDIO_WIDGET_HTML = """
 <section id="voice-shifter" data-pitch-shift-widget>
     <h3>REAL-TIME VOICE SHIFTER</h3>
     <p>Browser microphone → +12 semitone pitch shift → local speakers. Headphones are recommended to prevent feedback.</p>
+    <label for="voice-input-device">Input microphone</label>
+    <select id="voice-input-device" data-voice-device disabled>
+        <option value="">System default microphone</option>
+    </select>
+    <p class="voice-device-help">Browsers hide microphone names until you grant microphone permission. Click below to allow access and list devices; the temporary permission stream stops immediately. Stop voice shifting before changing microphones.</p>
+    <button type="button" data-voice-list>Allow access &amp; list microphones</button>
+    <div class="voice-device-status" data-voice-device-status aria-live="polite">Microphone names appear after permission is granted.</div>
     <button type="button" data-voice-start>Start feminine pitch</button>
     <div id="voice-shifter-status" data-voice-status>Microphone idle</div>
 </section>
@@ -715,15 +758,33 @@ js_func = r"""
         panel.dataset.bound = "true";
 
         const button = panel.querySelector("[data-voice-start]");
+        const deviceSelect = panel.querySelector("[data-voice-device]");
+        const listButton = panel.querySelector("[data-voice-list]");
+        const deviceStatus = panel.querySelector("[data-voice-device-status]");
         const status = panel.querySelector("[data-voice-status]");
         let context = null;
         let stream = null;
         let source = null;
         let shifter = null;
+        let microphoneDevices = [];
+        let listingDevices = false;
+        let starting = false;
 
         const setStatus = (message, error = false) => {
             status.textContent = message;
             status.style.color = error ? "#ff8aca" : "";
+        };
+
+        const setDeviceStatus = (message, error = false) => {
+            deviceStatus.textContent = message;
+            deviceStatus.style.color = error ? "#ff8aca" : "";
+        };
+
+        const updateDeviceControls = () => {
+            const busy = listingDevices || starting;
+            deviceSelect.disabled = Boolean(stream) || busy || microphoneDevices.length === 0;
+            listButton.disabled = Boolean(stream) || busy;
+            button.disabled = busy;
         };
 
         const workletSource = `
@@ -827,28 +888,169 @@ js_func = r"""
             button.textContent = "Start feminine pitch";
             button.classList.remove("stop");
             setStatus("Microphone idle");
+            updateDeviceControls();
         };
+
+        const explainStartupFailure = (error, stage) => {
+            const name = error?.name || "Error";
+            const detail = error?.message || "Unknown startup error";
+            if (stage === "audio-worklet" || /audio.?worklet/i.test(detail)) {
+                return `Audio processing could not start (${name}: ${detail}). Use a current browser on HTTPS or localhost, check browser audio permissions, reload, then try Start again.`;
+            }
+            if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+                return `Microphone permission was denied (${name}). Open this page on HTTPS or localhost, allow microphone access for this site in browser settings, reload, then try Start again.`;
+            }
+            if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+                return `No microphone input was found (${name}). Connect or enable a microphone, select it as the system input device, reload the page, then try Start again.`;
+            }
+            if (name === "NotReadableError" || name === "TrackStartError") {
+                return `The microphone is unavailable (${name}). Close other apps using it, check the operating system's microphone privacy setting, then try Start again.`;
+            }
+            if (name === "SecurityError") {
+                return `The browser blocked microphone access (${name}). Open this page on HTTPS or localhost, allow microphone access in site settings, then reload and retry.`;
+            }
+            return `Microphone startup failed (${detail}). Check the site's microphone permission and selected system input device, then try Start again.`;
+        };
+
+        const populateMicrophones = async () => {
+            if (typeof navigator.mediaDevices.enumerateDevices !== "function") {
+                throw new Error("This browser cannot list audio input devices.");
+            }
+            const previousDeviceId = deviceSelect.value;
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            microphoneDevices = devices.filter(
+                device =>
+                    device.kind === "audioinput" &&
+                    device.deviceId &&
+                    device.deviceId !== "default"
+            );
+            listButton.textContent = "Refresh microphone list";
+            const options = [new Option("System default microphone", "")];
+            microphoneDevices.forEach((device, index) => {
+                const label = (device.label || "").trim() || `Microphone ${index + 1} (name hidden)`;
+                options.push(new Option(label, device.deviceId));
+            });
+            deviceSelect.replaceChildren(...options);
+            if (microphoneDevices.some(device => device.deviceId === previousDeviceId)) {
+                deviceSelect.value = previousDeviceId;
+            } else {
+                deviceSelect.value = "";
+            }
+            updateDeviceControls();
+            if (microphoneDevices.length === 0) {
+                setDeviceStatus(
+                    "No individually selectable microphones were listed. The system default remains available."
+                );
+                return;
+            }
+            const namesVisible = microphoneDevices.some(device => device.label.trim());
+            setDeviceStatus(
+                namesVisible
+                    ? `Found ${microphoneDevices.length} microphone input${microphoneDevices.length === 1 ? "" : "s"}. Choose one, then start voice shifting.`
+                    : `Found ${microphoneDevices.length} microphone input${microphoneDevices.length === 1 ? "" : "s"}, but the browser still hides their names. The numbered choices can still be selected.`
+            );
+        };
+
+        listButton.addEventListener("click", async () => {
+            if (stream || listingDevices || starting) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setDeviceStatus(
+                    "This browser does not expose microphone capture. Use a current browser on HTTPS or localhost.",
+                    true
+                );
+                return;
+            }
+            if (typeof navigator.mediaDevices.enumerateDevices !== "function") {
+                setDeviceStatus(
+                    "This browser cannot list microphone inputs. Use a current browser, then reload and retry.",
+                    true
+                );
+                return;
+            }
+
+            let permissionStream = null;
+            listingDevices = true;
+            updateDeviceControls();
+            setDeviceStatus("Requesting microphone permission…");
+            try {
+                permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                await populateMicrophones();
+            } catch (error) {
+                const name = error?.name || "Error";
+                const message =
+                    name === "NotAllowedError" ||
+                    name === "PermissionDeniedError" ||
+                    name === "NotFoundError" ||
+                    name === "DevicesNotFoundError" ||
+                    name === "NotReadableError" ||
+                    name === "TrackStartError" ||
+                    name === "SecurityError"
+                        ? explainStartupFailure(error, "microphone")
+                        : `Microphone permission was granted, but inputs could not be listed (${error?.message || name}). Refresh the list or check browser microphone permissions.`;
+                setDeviceStatus(message, true);
+            } finally {
+                if (permissionStream) {
+                    permissionStream.getTracks().forEach(track => track.stop());
+                }
+                listingDevices = false;
+                updateDeviceControls();
+            }
+        });
+
+        deviceSelect.addEventListener("change", () => {
+            const selected = deviceSelect.selectedOptions[0]?.textContent;
+            setDeviceStatus(
+                deviceSelect.value
+                    ? `Selected ${selected}. Start voice shifting to use this microphone.`
+                    : "The system default microphone is selected."
+            );
+        });
+
+        updateDeviceControls();
 
         button.addEventListener("click", async () => {
             if (stream) {
                 stop();
                 return;
             }
+            if (listingDevices || starting) return;
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 setStatus("This browser does not expose microphone capture.", true);
                 return;
             }
 
+            const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+            const hasAudioWorklet = Boolean(
+                AudioContextCtor &&
+                AudioContextCtor.prototype &&
+                "audioWorklet" in AudioContextCtor.prototype &&
+                typeof window.AudioWorkletNode === "function"
+            );
+            if (!hasAudioWorklet) {
+                setStatus(
+                    "This browser does not support the AudioWorklet needed for voice shifting. Use a current Chrome or Edge browser on HTTPS or localhost, then reload and try Start again.",
+                    true
+                );
+                return;
+            }
+
+            let startupStage = "microphone";
+            starting = true;
+            updateDeviceControls();
             try {
                 setStatus("Requesting microphone permission…");
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false
-                    }
-                });
+                const audioConstraints = {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                };
+                if (deviceSelect.value) {
+                    audioConstraints.deviceId = { exact: deviceSelect.value };
+                }
+                stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                startupStage = "audio-worklet";
+                updateDeviceControls();
                 context = new (window.AudioContext || window.webkitAudioContext)();
                 const moduleUrl = URL.createObjectURL(
                     new Blob([workletSource], { type: "application/javascript" })
@@ -862,10 +1064,14 @@ js_func = r"""
                 await context.resume();
                 button.textContent = "Stop voice shifter";
                 button.classList.add("stop");
-                setStatus("Live // +12 semitones // speaker output");
+                const inputLabel = deviceSelect.selectedOptions[0]?.textContent || "System default microphone";
+                setStatus(`Live // +12 semitones // ${inputLabel} // speaker output`);
             } catch (error) {
                 stop();
-                setStatus(`Microphone error: ${error.message}`, true);
+                setStatus(explainStartupFailure(error, startupStage), true);
+            } finally {
+                starting = false;
+                updateDeviceControls();
             }
         });
 
