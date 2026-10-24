@@ -898,18 +898,23 @@ js_func = r"""
                 return `Audio processing could not start (${name}: ${detail}). Use a current browser on HTTPS or localhost, check browser audio permissions, reload, then try Start again.`;
             }
             if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-                return `Microphone permission was denied (${name}). Open this page on HTTPS or localhost, allow microphone access for this site in browser settings, reload, then try Start again.`;
+                return `Microphone access was blocked (${name}). In Chrome or Edge, open the site's controls beside the address bar and set Microphone to Allow. In Windows, open Settings > Privacy & security > Microphone and enable Microphone access and Let desktop apps access your microphone. Then click Allow access & list microphones, choose an input, and try Start again.`;
             }
-            if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-                return `No microphone input was found (${name}). Connect or enable a microphone, select it as the system input device, reload the page, then try Start again.`;
+            if (
+                name === "NotFoundError" ||
+                name === "DevicesNotFoundError" ||
+                name === "OverconstrainedError" ||
+                name === "ConstraintNotSatisfiedError"
+            ) {
+                return `No microphone input was found (${name}). Connect or enable a microphone, then check Windows Settings > System > Sound > Input. If the selected device was disconnected, reconnect it or choose another input with Refresh microphone list. Then try Start again.`;
             }
             if (name === "NotReadableError" || name === "TrackStartError") {
-                return `The microphone is unavailable (${name}). Close other apps using it, check the operating system's microphone privacy setting, then try Start again.`;
+                return `The microphone is unavailable (${name}), possibly because another app is using it. Close apps such as Teams or Zoom that are capturing it, check Windows Settings > Privacy & security > Microphone > Let desktop apps access your microphone, then refresh the microphone list and try Start again.`;
             }
             if (name === "SecurityError") {
-                return `The browser blocked microphone access (${name}). Open this page on HTTPS or localhost, allow microphone access in site settings, then reload and retry.`;
+                return `The browser blocked microphone access (${name}). Open the app over HTTPS or localhost, allow microphone access in Chrome or Edge site controls, then reload and retry.`;
             }
-            return `Microphone startup failed (${detail}). Check the site's microphone permission and selected system input device, then try Start again.`;
+            return `Microphone startup failed (${detail}). Check browser site permission and Windows Settings > System > Sound > Input, refresh the microphone list, select an input, then try Start again.`;
         };
 
         const populateMicrophones = async () => {
@@ -939,7 +944,7 @@ js_func = r"""
             updateDeviceControls();
             if (microphoneDevices.length === 0) {
                 setDeviceStatus(
-                    "No individually selectable microphones were listed. The system default remains available."
+                    "Windows listed no individual microphone inputs. Connect or enable a microphone in Settings > System > Sound > Input, then click Refresh microphone list. The system default remains available."
                 );
                 return;
             }

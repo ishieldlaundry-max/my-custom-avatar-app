@@ -403,7 +403,7 @@ def test_voice_shifter_microphone_list_permission_denial_is_explained(voice_shif
     page.evaluate("() => { window.__audioTest.rejectGetUserMedia = true; }")
     page.locator("[data-voice-list]").click()
     page.wait_for_function(
-        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Microphone permission was denied')"
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Microphone access was blocked')"
     )
 
     result = page.evaluate(
@@ -415,11 +415,48 @@ def test_voice_shifter_microphone_list_permission_denial_is_explained(voice_shif
             trackStopCalls: window.__audioTest.trackStopCalls
         })"""
     )
-    assert "allow microphone access for this site in browser settings" in result["status"]
+    assert "Chrome or Edge" in result["status"]
+    assert "Settings > Privacy & security > Microphone" in result["status"]
     assert result["selectDisabled"] is True
     assert result["listDisabled"] is False
     assert result["enumerateDevicesCalls"] == 0
     assert result["trackStopCalls"] == 0
+
+
+def test_voice_shifter_recovers_after_no_inputs_are_listed(voice_shifter_page):
+    page = voice_shifter_page
+    list_button = page.locator("[data-voice-list]")
+    device_select = page.locator("[data-voice-device]")
+
+    page.evaluate("() => { window.__audioTest.enumeratedDevices = []; }")
+    list_button.click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Windows listed no individual microphone inputs')"
+    )
+
+    status = page.locator("[data-voice-device-status]").text_content()
+    assert "Settings > System > Sound > Input" in status
+    assert "click Refresh microphone list" in status
+    assert device_select.is_disabled()
+    assert list_button.text_content() == "Refresh microphone list"
+
+    page.evaluate(
+        """() => {
+            window.__audioTest.enumeratedDevices = [
+                { kind: "audioinput", deviceId: "builtin-mic", label: "Built-in Microphone" }
+            ];
+        }"""
+    )
+    list_button.click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Found 1 microphone input')"
+    )
+    device_select.select_option("builtin-mic")
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Live')"
+    )
+    assert "Built-in Microphone" in page.locator("[data-voice-status]").text_content()
 
 
 def test_voice_shifter_stops_permission_probe_if_device_enumeration_fails(
@@ -487,7 +524,7 @@ def test_voice_shifter_explains_denied_permission_and_retry(voice_shifter_page):
     page.evaluate("() => { window.__audioTest.rejectGetUserMedia = true; }")
     page.locator("[data-voice-start]").click()
     page.wait_for_function(
-        "() => document.querySelector('[data-voice-status]').textContent.includes('permission was denied')"
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Microphone access was blocked')"
     )
 
     result = page.evaluate(
@@ -497,10 +534,26 @@ def test_voice_shifter_explains_denied_permission_and_retry(voice_shifter_page):
             contextCount: window.__audioTest.contexts.length
         })"""
     )
-    assert "allow microphone access for this site in browser settings" in result["status"]
-    assert "reload, then try Start again" in result["status"]
+    assert "Microphone access was blocked" in result["status"]
+    assert "Chrome or Edge" in result["status"]
+    assert "site's controls beside the address bar" in result["status"]
+    assert "Settings > Privacy & security > Microphone" in result["status"]
+    assert "Let desktop apps access your microphone" in result["status"]
+    assert "Allow access & list microphones" in result["status"]
     assert result["button"] == "Start feminine pitch"
     assert result["contextCount"] == 0
+
+    page.evaluate("() => { window.__audioTest.rejectGetUserMedia = false; }")
+    page.locator("[data-voice-list]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Found 2 microphone inputs')"
+    )
+    page.locator("[data-voice-device]").select_option("builtin-mic")
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Live')"
+    )
+    assert "Built-in Microphone" in page.locator("[data-voice-status]").text_content()
 
 
 def test_voice_shifter_explains_missing_microphone_and_device_recovery(voice_shifter_page):
@@ -519,8 +572,21 @@ def test_voice_shifter_explains_missing_microphone_and_device_recovery(voice_shi
 
     status = page.locator("[data-voice-status]").text_content()
     assert "Connect or enable a microphone" in status
-    assert "select it as the system input device" in status
+    assert "Settings > System > Sound > Input" in status
+    assert "Refresh microphone list" in status
     assert "try Start again" in status
+
+    page.evaluate("() => { window.__audioTest.rejectGetUserMedia = false; }")
+    page.locator("[data-voice-list]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Found 2 microphone inputs')"
+    )
+    page.locator("[data-voice-device]").select_option("builtin-mic")
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Live')"
+    )
+    assert "Built-in Microphone" in page.locator("[data-voice-status]").text_content()
 
 
 def test_voice_shifter_explains_busy_microphone_recovery(voice_shifter_page):
@@ -538,9 +604,17 @@ def test_voice_shifter_explains_busy_microphone_recovery(voice_shifter_page):
     )
 
     status = page.locator("[data-voice-status]").text_content()
-    assert "Close other apps using it" in status
-    assert "operating system's microphone privacy setting" in status
+    assert "Close apps such as Teams or Zoom" in status
+    assert "Settings > Privacy & security > Microphone" in status
+    assert "Let desktop apps access your microphone" in status
+    assert "refresh the microphone list" in status
     assert "try Start again" in status
+
+    page.evaluate("() => { window.__audioTest.rejectGetUserMedia = false; }")
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Live')"
+    )
 
 
 @pytest.mark.parametrize("missing_part", ["audioWorklet", "AudioWorkletNode"])
