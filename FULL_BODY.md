@@ -75,12 +75,21 @@ other settings unchanged. The benchmark accepts `--resolution 384`; the
 default remains 512 px.
 
 Before generation, the UI's **CHECK FRAMING & DURATION** action checks the
-target dimensions/aspect ratio and reads the driver duration. It warns about
-landscape or unusually cropped-looking framing, low-resolution targets, clips
-under one second, clips over 30 seconds, and unreadable videos. These checks
-cannot prove that a person is fully visible, so confirm that the target shows
-the head, feet, and both hands before enabling the render confirmation. The
-full-body path never silently falls back to the face-only renderer.
+target dimensions/aspect ratio and reads the driver duration. It displays the
+uncropped target image beside up to four evenly spaced driver frames with
+timestamp captions. The target retains its original aspect ratio, while driver
+frames are scaled down only to fit the panel. Select a driver thumbnail to
+inspect it at full size. These checks cannot prove that a person is fully
+visible, so confirm that the target shows the head, feet, and both hands before
+enabling the render confirmation. The full-body path never silently falls back
+to the face-only renderer.
+
+#### Check preview margins on Windows
+
+Use one portrait and one landscape target/driver pair. After each preflight,
+confirm all four edges remain visible in both preview panels and that the target
+and driver images remain after the report updates. Change the target and driver
+inputs separately and confirm the render-confirmation checkbox clears each time.
 
 ## Important limitations
 

@@ -1271,6 +1271,20 @@ with gr.Blocks(
             ),
             value=False,
         )
+        full_body_source_image.change(
+            fn=lambda _value: gr.update(value=False),
+            inputs=[full_body_source_image],
+            outputs=[full_body_confirm_framing],
+            show_progress=False,
+            queue=False,
+        )
+        full_body_driving_video.change(
+            fn=lambda _value: gr.update(value=False),
+            inputs=[full_body_driving_video],
+            outputs=[full_body_confirm_framing],
+            show_progress=False,
+            queue=False,
+        )
         with gr.Row():
             full_body_resolution = gr.Dropdown(
                 choices=[384, 512, 576],
