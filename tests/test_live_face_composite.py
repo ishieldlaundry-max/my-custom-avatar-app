@@ -5,6 +5,7 @@ import pytest
 
 from src.utils.live_face_composite import (
     build_face_mask,
+    build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
 
@@ -26,6 +27,27 @@ def test_landmark_mask_is_a_soft_face_shape_not_a_full_crop():
     assert mask[0, 0] < 0.05
     assert np.all((mask >= 0) & (mask <= 1))
     assert np.any((mask > 0) & (mask < 1))
+
+
+def test_source_image_landmarks_are_mapped_into_crop_before_masking():
+    landmarks_in_image = np.array(
+        [[116, 216], [132, 216], [132, 232], [116, 232]],
+        dtype=np.float32,
+    )
+    crop_to_image = np.array(
+        [[2.0, 0.0, 100.0], [0.0, 2.0, 200.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+    mask = build_face_mask_from_image_landmarks(
+        landmarks_in_image,
+        crop_to_image,
+        (32, 32),
+    )
+
+    assert mask[12, 12] > 0.95
+    assert mask[0, 0] < 0.05
+    assert mask[12, 24] < 0.05
 
 
 def test_face_composite_preserves_webcam_body_and_background():

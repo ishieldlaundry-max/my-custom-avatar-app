@@ -13,6 +13,7 @@ from src.utils import live_tracking_preview as preview
 from src.utils import live_portrait_effects as effects
 from src.utils.live_face_composite import (
     build_face_mask,
+    build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
 
@@ -196,7 +197,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
     )
     pipe = NS(
         src_imgs=[frames[0]],
-        src_infos=[[[{}, source_landmarks]]],
+        src_infos=[[[{}, source_landmarks, np.eye(3, dtype=np.float32)]]],
         src_lmk_pre="stale",
         is_source_video=False,
         last_driver_crop_to_original=np.array(
@@ -230,7 +231,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         resolve_camera_source=preview.resolve_camera_source,
         LiveTrackingPreview=preview.LiveTrackingPreview,
         LivePortraitEffects=effects.LivePortraitEffects,
-        build_face_mask=build_face_mask,
+        build_face_mask_from_image_landmarks=build_face_mask_from_image_landmarks,
         composite_photo_face_on_driver=composite_photo_face_on_driver,
         LatestFrameCapture=lambda _: reader, cv2=cv, np=np,
         os=__import__("os"), time=time, datetime=datetime, deque=deque,

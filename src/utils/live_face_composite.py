@@ -42,6 +42,48 @@ def build_face_mask(
     return mask.astype(np.float32) / 255.0
 
 
+def map_landmarks_to_crop_coordinates(
+    landmarks_in_image: np.ndarray,
+    crop_to_image: np.ndarray,
+) -> np.ndarray:
+    """Map face landmarks from the original image into the model crop."""
+    points = np.asarray(landmarks_in_image, dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] < 2:
+        raise ValueError("Face landmarks must be an Nx2 coordinate array.")
+
+    matrix = np.asarray(crop_to_image, dtype=np.float32)
+    if matrix.shape == (2, 3):
+        matrix = np.vstack((matrix, np.array([[0.0, 0.0, 1.0]], dtype=np.float32)))
+    if matrix.shape != (3, 3) or not np.isfinite(matrix).all():
+        raise ValueError("The crop-to-image transform must be a finite 2x3 or 3x3 matrix.")
+    try:
+        image_to_crop = np.linalg.inv(matrix)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("The crop-to-image transform must be invertible.") from exc
+
+    points_h = np.concatenate(
+        (points[:, :2], np.ones((len(points), 1), dtype=np.float32)),
+        axis=1,
+    )
+    mapped = points_h @ image_to_crop.T
+    if np.any(np.abs(mapped[:, 2]) < 1e-8):
+        raise ValueError("The image-to-crop transform produced invalid landmarks.")
+    return mapped[:, :2] / mapped[:, 2:3]
+
+
+def build_face_mask_from_image_landmarks(
+    landmarks_in_image: np.ndarray,
+    crop_to_image: np.ndarray,
+    crop_shape: tuple[int, ...],
+) -> np.ndarray:
+    """Build the alpha mask after converting image-space landmarks to crop space."""
+    landmarks_in_crop = map_landmarks_to_crop_coordinates(
+        landmarks_in_image,
+        crop_to_image,
+    )
+    return build_face_mask(landmarks_in_crop, crop_shape)
+
+
 def composite_photo_face_on_driver(
     driver_bgr: np.ndarray,
     generated_face_rgb: np.ndarray,

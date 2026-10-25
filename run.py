@@ -42,7 +42,7 @@ from src.utils.virtual_camera import VirtualCameraBroadcaster
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
 from src.utils.live_face_composite import (
-    build_face_mask,
+    build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
 from src.utils.realtime_capture import LatestFrameCapture
@@ -133,7 +133,14 @@ def run_with_video(args):
     h, w = pipe.src_imgs[0].shape[:2]
     if face_swap_output:
         face_landmarks = pipe.src_infos[0][0][1]
-        face_mask = build_face_mask(face_landmarks, (512, 512))
+        source_crop_to_image = pipe.src_infos[0][0][-1]
+        if hasattr(source_crop_to_image, "detach"):
+            source_crop_to_image = source_crop_to_image.detach().cpu().numpy()
+        face_mask = build_face_mask_from_image_landmarks(
+            face_landmarks,
+            source_crop_to_image,
+            (512, 512),
+        )
     else:
         face_mask = None
     if args.virtual_camera and face_swap_output:
