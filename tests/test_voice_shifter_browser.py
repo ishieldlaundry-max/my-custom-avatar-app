@@ -556,6 +556,39 @@ def test_voice_shifter_explains_denied_permission_and_retry(voice_shifter_page):
     assert "Built-in Microphone" in page.locator("[data-voice-status]").text_content()
 
 
+def test_voice_shifter_webview2_permission_guidance_and_retry(voice_shifter_page):
+    page = voice_shifter_page
+    page.evaluate(
+        """() => {
+            window.chrome = window.chrome || {};
+            window.chrome.webview = {};
+            window.__audioTest.rejectGetUserMedia = true;
+        }"""
+    )
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Microphone access was blocked')"
+    )
+
+    status = page.locator("[data-voice-status]").text_content()
+    assert "embedded Edge WebView2 window" in status
+    assert "no address-bar site menu" in status
+    assert "Settings > Privacy & security > Microphone" in status
+    assert "Let desktop apps access your microphone" in status
+    assert "Chrome or Edge" not in status
+
+    page.evaluate("() => { window.__audioTest.rejectGetUserMedia = false; }")
+    page.locator("[data-voice-list]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-device-status]').textContent.includes('Found 2 microphone inputs')"
+    )
+    page.locator("[data-voice-device]").select_option("builtin-mic")
+    page.locator("[data-voice-start]").click()
+    page.wait_for_function(
+        "() => document.querySelector('[data-voice-status]').textContent.includes('Live')"
+    )
+
+
 def test_voice_shifter_explains_missing_microphone_and_device_recovery(voice_shifter_page):
     page = voice_shifter_page
     page.evaluate(

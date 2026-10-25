@@ -891,6 +891,13 @@ js_func = r"""
             updateDeviceControls();
         };
 
+        const permissionRecovery = () => {
+            if (window.chrome?.webview || window.pywebview) {
+                return "AvatarDesktop uses an embedded Edge WebView2 window, so there is no address-bar site menu. Allow any microphone prompt shown by the app. In Windows Settings > Privacy & security > Microphone, enable Microphone access and Let desktop apps access your microphone. Then click Allow access & list microphones and retry Start; if still blocked, close and reopen AvatarDesktop.";
+            }
+            return "In Chrome or Edge, open the site's controls beside the address bar and set Microphone to Allow. In Windows Settings > Privacy & security > Microphone, enable Microphone access and Let desktop apps access your microphone. Then click Allow access & list microphones, choose an input, and try Start again.";
+        };
+
         const explainStartupFailure = (error, stage) => {
             const name = error?.name || "Error";
             const detail = error?.message || "Unknown startup error";
@@ -898,7 +905,7 @@ js_func = r"""
                 return `Audio processing could not start (${name}: ${detail}). Use a current browser on HTTPS or localhost, check browser audio permissions, reload, then try Start again.`;
             }
             if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-                return `Microphone access was blocked (${name}). In Chrome or Edge, open the site's controls beside the address bar and set Microphone to Allow. In Windows, open Settings > Privacy & security > Microphone and enable Microphone access and Let desktop apps access your microphone. Then click Allow access & list microphones, choose an input, and try Start again.`;
+                return `Microphone access was blocked (${name}). ${permissionRecovery()}`;
             }
             if (
                 name === "NotFoundError" ||
@@ -912,7 +919,7 @@ js_func = r"""
                 return `The microphone is unavailable (${name}), possibly because another app is using it. Close apps such as Teams or Zoom that are capturing it, check Windows Settings > Privacy & security > Microphone > Let desktop apps access your microphone, then refresh the microphone list and try Start again.`;
             }
             if (name === "SecurityError") {
-                return `The browser blocked microphone access (${name}). Open the app over HTTPS or localhost, allow microphone access in Chrome or Edge site controls, then reload and retry.`;
+                return `The browser blocked microphone access (${name}). Open the app over HTTPS or localhost. ${permissionRecovery()}`;
             }
             return `Microphone startup failed (${detail}). Check browser site permission and Windows Settings > System > Sound > Input, refresh the microphone list, select an input, then try Start again.`;
         };
