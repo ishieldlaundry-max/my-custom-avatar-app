@@ -62,7 +62,7 @@
         <button id="start" disabled>Start webcam tracking</button>
         <button id="stop" disabled>Stop webcam</button>
         <div id="detail">Create a photo avatar in the section above, or load a compatible humanoid VRM. The first model request and tracking models require an internet connection.</div>
-        <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
+        <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Pose landmarks drive the arms, legs, and a bounded side-to-side hip roll. The status shows which parts are currently tracking; briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
         <div class="metric"><span>Render rate</span><span id="fps">—</span></div>
@@ -147,6 +147,27 @@
       while (angle < -Math.PI) angle += Math.PI * 2;
       return angle;
     };
+    function getHipRollTarget(landmarks) {
+      const left = landmarks?.[23], right = landmarks?.[24];
+      if (
+        !(left?.visibility > 0.25 && right?.visibility > 0.25) ||
+        !Number.isFinite(left.x) ||
+        !Number.isFinite(left.y) ||
+        !Number.isFinite(right.x) ||
+        !Number.isFinite(right.y)
+      ) return null;
+      const angle = Math.atan2(-(right.y - left.y), right.x - left.x);
+      return Math.max(-0.35, Math.min(0.35, -angle));
+    }
+    function formatTrackingStatus(faceTracked, bodyTracked, trackedHands) {
+      const parts = [];
+      if (faceTracked) parts.push("FACE");
+      if (bodyTracked) parts.push("BODY");
+      if (trackedHands > 0) {
+        parts.push(String(trackedHands) + (trackedHands === 1 ? " HAND" : " HANDS"));
+      }
+      return parts.join(" + ") || "NO TRACK";
+    }
     const getBone = (name) => {
       if (vrm) return vrm.humanoid?.getNormalizedBoneNode(name) || null;
       const genericName = genericBoneNames[name];
@@ -324,12 +345,14 @@
     }
 
     function applyPose(landmarks) {
-      if (!avatarRoot || !landmarks?.length) return;
+      if (!avatarRoot || !landmarks?.length) return false;
       const p = landmarks;
+      let trackedSegments = 0;
       const setLimb = (name, a, b, restAngle) => {
         const bone = getBone(name);
         if (bone && p[a]?.visibility > 0.25 && p[b]?.visibility > 0.25) {
           smooth(bone, "z", clamp(angle2D(p[a], p[b]) - restAngle, -1.8, 1.8));
+          trackedSegments++;
         }
       };
       // Use stable landmark segments for a conservative first-pass body retarget.
@@ -342,10 +365,19 @@
       setLimb(boneNames.rightLowerLeg, 26, 28, -Math.PI / 2);
       setLimb(boneNames.leftUpperLeg, 23, 25, -Math.PI / 2);
       setLimb(boneNames.leftLowerLeg, 25, 27, -Math.PI / 2);
-      const shoulders = p[11] && p[12] ? angle2D(p[11], p[12]) : 0;
+      const hip = getBone(boneNames.hips);
+      const hipRoll = getHipRollTarget(p);
+      if (hip && hipRoll !== null) {
+        smooth(hip, "z", hipRoll);
+        trackedSegments++;
+      }
       const chest = getBone(boneNames.chest) || getBone(boneNames.spine);
-      smooth(chest, "z", clamp(-shoulders, -0.45, 0.45));
-      trackingEl.textContent = "BODY";
+      if (chest && p[11]?.visibility > 0.25 && p[12]?.visibility > 0.25) {
+        const shoulders = angle2D(p[11], p[12]);
+        smooth(chest, "z", clamp(-shoulders, -0.45, 0.45));
+        trackedSegments++;
+      }
+      return trackedSegments > 0;
     }
 
     function applyHands(result, poseLandmarks) {
@@ -413,21 +445,24 @@
         trackedHands++;
       }
       if (trackedHands) {
-        trackingEl.textContent = `FACE + BODY + ${trackedHands} HAND${trackedHands === 1 ? "" : "S"}`;
+        return trackedHands;
       }
+      return 0;
     }
 
     function applyFace(result) {
       const face = result?.faceLandmarks?.[0];
-      if (!avatarRoot || !face) return;
+      if (!avatarRoot || !face) return false;
       const leftEye = face[33], rightEye = face[263], nose = face[1];
       const head = getBone(boneNames.head);
+      let tracked = false;
       if (head && leftEye && rightEye && nose) {
         const eyeMidX = (leftEye.x + rightEye.x) / 2;
         const eyeMidY = (leftEye.y + rightEye.y) / 2;
         smooth(head, "y", clamp((nose.x - eyeMidX) * 3.2, -0.65, 0.65));
         smooth(head, "x", clamp((nose.y - eyeMidY - 0.13) * 3, -0.5, 0.5));
         smooth(head, "z", clamp(Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x), -0.5, 0.5));
+        tracked = true;
       }
       const categories = result.faceBlendshapes?.[0]?.categories || [];
       const values = Object.fromEntries(categories.map((x) => [x.categoryName, x.score]));
@@ -436,8 +471,9 @@
         manager.setValue("blink", clamp(((values.eyeBlinkLeft || 0) + (values.eyeBlinkRight || 0)) / 2, 0, 1));
         manager.setValue("aa", clamp(values.jawOpen || 0, 0, 1));
         manager.setValue("happy", clamp(((values.mouthSmileLeft || 0) + (values.mouthSmileRight || 0)) / 2, 0, 1));
+        tracked = true;
       }
-      trackingEl.textContent = "FACE + BODY";
+      return tracked;
     }
 
     function trackFrame() {
@@ -447,9 +483,15 @@
         const pose = poseLandmarker?.detectForVideo(video, now);
         const face = faceLandmarker?.detectForVideo(video, now);
         const hands = handLandmarker?.detectForVideo(video, now);
-        applyPose(pose?.landmarks?.[0]);
-        applyFace(face);
-        applyHands(hands, pose?.landmarks?.[0]);
+        const poseLandmarks = pose?.landmarks?.[0];
+        const bodyTracked = applyPose(poseLandmarks);
+        const faceTracked = applyFace(face);
+        const trackedHands = applyHands(hands, poseLandmarks);
+        trackingEl.textContent = formatTrackingStatus(
+          faceTracked,
+          bodyTracked,
+          trackedHands
+        );
       }
       requestAnimationFrame(trackFrame);
     }

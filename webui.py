@@ -1427,7 +1427,7 @@ with gr.Blocks(
             "### 2. Start webcam tracking\n"
             "The prepared avatar loads automatically after creation. Press **Start webcam tracking** "
             "in the preview to grant camera access and begin movement tracking. The webcam tracker "
-            "animates the avatar's head, chest, arms, and legs in place; the camera cannot recover "
+            "animates the avatar's head, chest, hips, arms, and legs in place; the camera cannot recover "
             "hidden joints or true depth."
         )
         gr.HTML(
