@@ -16,6 +16,7 @@ from src.utils.live_face_composite import (
     build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
+from src.pipelines import faster_live_portrait_pipeline as live_pipeline
 
 
 @pytest.fixture
@@ -43,6 +44,23 @@ def test_waits_for_deliberate_calibration_and_can_recalibrate(ui):
     assert controller.ready
     controller.poll()
     assert controller.needs_reference
+
+
+def test_eye_retargeting_combines_left_and_right_live_measurements(monkeypatch):
+    monkeypatch.setattr(
+        live_pipeline,
+        "calc_eye_close_ratio",
+        lambda _landmarks: np.array([[0.1, 0.2]], dtype=np.float32),
+    )
+    pipeline = object.__new__(live_pipeline.FasterLivePortraitPipeline)
+    pipeline.model_dict = {}
+
+    result = pipeline.calc_combined_eye_ratio(
+        np.array([[0.2, 0.4]], dtype=np.float32),
+        np.zeros((106, 2), dtype=np.float32),
+    )
+
+    np.testing.assert_allclose(result, [[0.1, 0.2, 0.3]])
 
 
 @pytest.mark.parametrize("key", [ord("q"), 27])

@@ -124,7 +124,12 @@ class FasterLivePortraitPipeline:
 
     def calc_combined_eye_ratio(self, c_d_eyes_i, source_lmk):
         c_s_eyes = calc_eye_close_ratio(source_lmk[None])
-        c_d_eyes_i = np.array(c_d_eyes_i).reshape(1, 1)
+        driver_eye_ratios = np.asarray(c_d_eyes_i, dtype=np.float32)
+        if driver_eye_ratios.size == 0 or not np.isfinite(driver_eye_ratios).all():
+            raise ValueError("Live eye-closure ratios must contain finite values.")
+        # The retargeter accepts one desired eye-closure value; the webcam
+        # landmark model reports a separate value for each eye.
+        c_d_eyes_i = np.array([[driver_eye_ratios.mean()]], dtype=np.float32)
         # [c_s,eyes, c_d,eyes,i]
         combined_eye_ratio_tensor = np.concatenate([c_s_eyes, c_d_eyes_i], axis=1)
         return combined_eye_ratio_tensor
