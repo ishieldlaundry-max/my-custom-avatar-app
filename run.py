@@ -77,6 +77,11 @@ def run_with_video(args):
     infer_cfg.infer_params.flag_pasteback = args.paste_back or face_swap_output
     if face_swap_output:
         infer_cfg.infer_params.flag_crop_driving_video = True
+        # In this path the still photo may carry a different eye/mouth pose.
+        # Retarget those features to the live webcam ratios instead of leaving
+        # the source photo's smile or blink as the output baseline.
+        infer_cfg.infer_params.flag_eye_retargeting = True
+        infer_cfg.infer_params.flag_lip_retargeting = True
 
     pipe = FasterLivePortraitPipeline(cfg=infer_cfg, is_animal=args.animal)
     ret = pipe.prepare_source(args.src_image, realtime=args.realtime)

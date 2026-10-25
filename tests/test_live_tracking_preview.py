@@ -224,9 +224,10 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
             [{k: np.zeros((1, 1)) for k in ("pitch", "yaw", "roll")}],
         )
     pipe.run = render
+    config = NS(infer_params=NS(flag_pasteback=True))
     namespace = dict(
         Fore=NS(RED=""), Style=NS(RESET_ALL=""),
-        OmegaConf=NS(load=lambda _: NS(infer_params=NS(flag_pasteback=True))),
+        OmegaConf=NS(load=lambda _: config),
         FasterLivePortraitPipeline=lambda **_: pipe,
         resolve_camera_source=preview.resolve_camera_source,
         LiveTrackingPreview=preview.LiveTrackingPreview,
@@ -250,6 +251,8 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         use_driver_background=True,
     ))
     assert calls == [(1, True), (2, False), (3, True)]
+    assert config.infer_params.flag_eye_retargeting is True
+    assert config.infer_params.flag_lip_retargeting is True
     reader.close.assert_called_once()
     assert any(call.args[0] == "Your camera" for call in cv.imshow.call_args_list)
     render_frames = [
