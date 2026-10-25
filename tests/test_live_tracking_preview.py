@@ -11,6 +11,10 @@ import pytest
 
 from src.utils import live_tracking_preview as preview
 from src.utils import live_portrait_effects as effects
+from src.utils.live_face_composite import (
+    build_face_mask,
+    composite_photo_face_on_driver,
+)
 
 
 @pytest.fixture
@@ -127,6 +131,21 @@ def test_toolbar_click_does_not_select_shoulder(ui):
     controller.effects._driver_click.assert_called_once()
 
 
+def test_face_swap_preview_explains_camera_body_and_hides_shoulder_controls(monkeypatch):
+    cv = MagicMock()
+    monkeypatch.setattr(preview, "cv2", cv)
+    controller = preview.LiveTrackingPreview(0, face_swap_mode=True)
+
+    controller.add_controls(np.zeros((480, 640, 3), np.uint8))
+    labels = [label for _, _, label in controller.buttons]
+    controller.tracking_result(True)
+
+    assert labels == ["Calibrate face (C)", "Head: ON (H)", "Stop tracking (Q)"]
+    assert "webcam body/background retained" in controller.status
+    controller.tracking_result(False)
+    assert "webcam body/background remain visible" in controller.status
+
+
 def test_buttons_follow_camera_height_and_show_toggle_state(ui):
     controller, cv = ui
     controller.head_enabled = False
@@ -167,15 +186,42 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
     cv.cvtColor.side_effect = lambda f, _: f.copy()
     monkeypatch.setattr(preview, "cv2", cv)
     monkeypatch.setattr(effects, "cv2", cv)
-    pipe = NS(src_imgs=[frames[0]],
-              src_infos=[[[{}, np.array([[2, 2], [6, 6]])]]], src_lmk_pre="stale")
+    source_landmarks = np.array(
+        [
+            [256, 90], [325, 115], [370, 180], [360, 270],
+            [320, 345], [256, 370], [192, 345], [152, 270],
+            [142, 180], [187, 115],
+        ],
+        dtype=np.float32,
+    )
+    pipe = NS(
+        src_imgs=[frames[0]],
+        src_infos=[[[{}, source_landmarks]]],
+        src_lmk_pre="stale",
+        is_source_video=False,
+        last_driver_crop_to_original=np.array(
+            [[1 / 64, 0, 0], [0, 1 / 64, 0], [0, 0, 1]],
+            dtype=np.float32,
+        ),
+    )
     pipe.prepare_source = lambda *a, **k: True
     calls = []
     def render(frame, *args, **kwargs):
         assert pipe.src_lmk_pre is None
         calls.append((int(frame[0, 0, 0]), kwargs["first_frame"]))
         pipe.src_lmk_pre = "old landmarks"
-        return frame, frame, frame, [{k: np.zeros((1, 1)) for k in ("pitch", "yaw", "roll")}]
+        pipe.last_driver_crop_to_original = np.array(
+            [[1 / 64, 0, 0], [0, 1 / 64, 0], [0, 0, 1]],
+            dtype=np.float32,
+        )
+        photo_face = np.zeros((512, 512, 3), dtype=np.uint8)
+        photo_face[:] = (255, 0, 0)
+        return (
+            frame,
+            photo_face,
+            frame,
+            [{k: np.zeros((1, 1)) for k in ("pitch", "yaw", "roll")}],
+        )
     pipe.run = render
     namespace = dict(
         Fore=NS(RED=""), Style=NS(RESET_ALL=""),
@@ -184,106 +230,31 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         resolve_camera_source=preview.resolve_camera_source,
         LiveTrackingPreview=preview.LiveTrackingPreview,
         LivePortraitEffects=effects.LivePortraitEffects,
+        build_face_mask=build_face_mask,
+        composite_photo_face_on_driver=composite_photo_face_on_driver,
         LatestFrameCapture=lambda _: reader, cv2=cv, np=np,
         os=__import__("os"), time=time, datetime=datetime, deque=deque,
+        DriverBackgroundError=RuntimeError,
+        extract_target_alpha=lambda *_: pytest.fail(
+            "Live webcam face swap must not extract or composite the target body."
+        ),
+        composite_target_over_driver_background=lambda *_: pytest.fail(
+            "Live webcam face swap must preserve the camera body/background."
+        ),
     )
     exec(compile(ast.Module(body=[function], type_ignores=[]), "run.py", "exec"), namespace)
     namespace["run_with_video"](NS(
         cfg="unused", paste_back=True, animal=False, src_image="unused",
         realtime=True, dri_video="0", virtual_camera=False, realtime_metrics=False,
+        use_driver_background=True,
     ))
     assert calls == [(1, True), (2, False), (3, True)]
     reader.close.assert_called_once()
     assert any(call.args[0] == "Your camera" for call in cv.imshow.call_args_list)
-
-
-def test_live_driver_background_captures_room_before_tracking(monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(preview.time, "sleep", lambda _seconds: None)
-    root = Path(__file__).resolve().parents[1]
-    module = ast.parse((root / "run.py").read_text())
-    function = next(
-        node
-        for node in module.body
-        if isinstance(node, ast.FunctionDef) and node.name == "run_with_video"
-    )
-    frames = [np.full((8, 8, 3), index, np.uint8) for index in range(1, 10)]
-    reader = MagicMock()
-    reader.start.return_value = reader
-    reader.read.side_effect = [(True, frame) for frame in frames]
-    cv = MagicMock()
-    cv.VideoCapture.return_value.get.return_value = 30
-    cv.getWindowProperty.return_value = 1
-    cv.waitKey.side_effect = [ord("g"), *([-1] * 6), ord("c"), ord("q")]
-    cv.flip.side_effect = lambda frame, _axis: frame.copy()
-    cv.resize.side_effect = lambda frame, _size: frame
-    cv.cvtColor.side_effect = lambda frame, _code: frame.copy()
-    monkeypatch.setattr(preview, "cv2", cv)
-    monkeypatch.setattr(effects, "cv2", cv)
-
-    pipe = NS(
-        src_imgs=[frames[0]],
-        src_infos=[[[{}, np.array([[2, 2], [6, 6]])]]],
-        src_lmk_pre="stale",
-        is_source_video=False,
-    )
-    pipe.prepare_source = lambda *args, **kwargs: True
-    rendered_frames = []
-
-    def render(frame, *args, **kwargs):
-        rendered_frames.append(int(frame[0, 0, 0]))
-        pipe.src_lmk_pre = "old landmarks"
-        return frame, frame, frame, [
-            {key: np.zeros((1, 1)) for key in ("pitch", "yaw", "roll")}
-        ]
-
-    pipe.run = render
-    composited_backgrounds = []
-
-    def composite(target, background, alpha):
-        composited_backgrounds.append(background.copy())
-        return target.copy()
-
-    namespace = dict(
-        Fore=NS(RED=""),
-        Style=NS(RESET_ALL=""),
-        OmegaConf=NS(load=lambda _: NS(infer_params=NS(flag_pasteback=True))),
-        FasterLivePortraitPipeline=lambda **_: pipe,
-        resolve_camera_source=preview.resolve_camera_source,
-        LiveTrackingPreview=preview.LiveTrackingPreview,
-        LivePortraitEffects=effects.LivePortraitEffects,
-        LatestFrameCapture=lambda _capture: reader,
-        RollingRealtimeMetrics=None,
-        DriverBackgroundError=RuntimeError,
-        extract_target_alpha=lambda _path, shape: np.ones(shape, dtype=np.float32),
-        composite_target_over_driver_background=composite,
-        VirtualCameraBroadcaster=None,
-        cv2=cv,
-        np=np,
-        os=__import__("os"),
-        time=time,
-        datetime=datetime,
-        deque=deque,
-    )
-    exec(
-        compile(ast.Module(body=[function], type_ignores=[]), "run.py", "exec"),
-        namespace,
-    )
-    namespace["run_with_video"](
-        NS(
-            cfg="unused",
-            paste_back=True,
-            animal=False,
-            src_image="target.png",
-            realtime=True,
-            dri_video="0",
-            virtual_camera=False,
-            realtime_metrics=False,
-            use_driver_background=True,
-        )
-    )
-
-    assert rendered_frames == [8]
-    assert len(composited_backgrounds) == 1
-    assert np.all(composited_backgrounds[0] == 4)
-    reader.close.assert_called_once()
+    render_frames = [
+        call.args[1]
+        for call in cv.imshow.call_args_list
+        if call.args[0] == "Render"
+    ]
+    np.testing.assert_array_equal(render_frames[-1][0, 0], [3, 3, 3])
+    np.testing.assert_array_equal(render_frames[-1][4, 4], [0, 0, 255])

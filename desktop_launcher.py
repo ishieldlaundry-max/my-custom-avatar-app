@@ -116,16 +116,17 @@ def main():
             return
         if not window.create_confirmation_dialog(
             "Start live tracking",
-            "This closes the workspace server to free GPU memory. The portrait will open "
-            "in a separate live tracking window. Close other webcam apps first. Continue?"
+            "This closes the workspace server to free GPU memory. The webcam supplies the "
+            "live body and background; the selected photo supplies the animated face. "
+            "Close other webcam apps first. Continue?"
         ):
             return
         stop_process(server)
         live = start_process(["run.py", "--cfg", "configs/onnx_infer.yaml", "--realtime",
                               "--require-nvidia", "--dri_video", "0", "--paste_back",
                               "--src_image", files[0]], "live")
-        window.load_html("<html><body><h2>Live tracking started</h2><p>Look for the "
-                         "portrait preview window. If none appears, open logs from the App menu. "
+        window.load_html("<html><body><h2>Live face swap started</h2><p>Look for the "
+                         "live camera and face-swap windows. If none appears, open logs from the App menu. "
                          "Restart Avatar Studio to return to the workspace.</p></body></html>")
         def watch_live():
             code = live.wait()

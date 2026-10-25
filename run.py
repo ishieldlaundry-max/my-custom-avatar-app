@@ -41,6 +41,10 @@ from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
+from src.utils.live_face_composite import (
+    build_face_mask,
+    composite_photo_face_on_driver,
+)
 from src.utils.realtime_capture import LatestFrameCapture
 from src.utils.driver_background import (
     DriverBackgroundError,
@@ -55,9 +59,24 @@ else:
 
 
 def run_with_video(args):
-    print(Fore.RED + 'Live: C calibrate | H head | S select shoulders | B shoulders off | L shading | Q exit' + Style.RESET_ALL)
+    is_webcam, capture_source = resolve_camera_source(args.dri_video)
+    face_swap_output = bool(args.realtime and is_webcam and not args.animal)
+    if face_swap_output:
+        print(
+            Fore.RED
+            + "Live webcam: camera body/background + animated photo face | C calibrate | H head | Q exit"
+            + Style.RESET_ALL
+        )
+    else:
+        print(
+            Fore.RED
+            + "Live: C calibrate | H head | S select shoulders | B shoulders off | L shading | Q exit"
+            + Style.RESET_ALL
+        )
     infer_cfg = OmegaConf.load(args.cfg)
-    infer_cfg.infer_params.flag_pasteback = args.paste_back
+    infer_cfg.infer_params.flag_pasteback = args.paste_back or face_swap_output
+    if face_swap_output:
+        infer_cfg.infer_params.flag_crop_driving_video = True
 
     pipe = FasterLivePortraitPipeline(cfg=infer_cfg, is_animal=args.animal)
     ret = pipe.prepare_source(args.src_image, realtime=args.realtime)
@@ -65,6 +84,15 @@ def run_with_video(args):
         print(f"no face in {args.src_image}! exit!")
         exit(1)
     use_driver_background = getattr(args, "use_driver_background", False)
+    if face_swap_output and pipe.is_source_video:
+        raise ValueError("Live webcam face swapping requires a still source photo.")
+    if face_swap_output and use_driver_background:
+        print(
+            "Ignoring legacy whole-person background compositing: live webcam output "
+            "now keeps the camera body/background and swaps only the photo face.",
+            flush=True,
+        )
+        use_driver_background = False
     if use_driver_background and not args.paste_back:
         raise ValueError("--use_driver_background requires --paste_back.")
     if use_driver_background and pipe.is_source_video:
@@ -77,9 +105,8 @@ def run_with_video(args):
             raise RuntimeError(str(exc)) from exc
     if args.virtual_camera and not args.realtime:
         raise ValueError("--virtual_camera requires --realtime.")
-    if args.virtual_camera and not args.paste_back:
+    if args.virtual_camera and not args.paste_back and not face_swap_output:
         raise ValueError("--virtual_camera requires --paste_back for a clean composited frame.")
-    is_webcam, capture_source = resolve_camera_source(args.dri_video)
     if is_webcam:
         # read frame from camera if no driving video input
         print(f"Live driver: camera {capture_source}", flush=True)
@@ -104,6 +131,16 @@ def run_with_video(args):
     if fps <= 0:
         fps = 30
     h, w = pipe.src_imgs[0].shape[:2]
+    if face_swap_output:
+        face_landmarks = pipe.src_infos[0][0][1]
+        face_mask = build_face_mask(face_landmarks, (512, 512))
+    else:
+        face_mask = None
+    if args.virtual_camera and face_swap_output:
+        camera_width = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        camera_height = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if camera_width > 0 and camera_height > 0:
+            w, h = camera_width, camera_height
     virtual_camera = None
     realtime_capture = None
     if args.realtime and is_webcam:
@@ -143,14 +180,19 @@ def run_with_video(args):
             live_preview = LiveTrackingPreview(
                 capture_source,
                 allow_background_capture=use_clean_background,
+                face_swap_mode=face_swap_output,
             )
-            live_preview.effects = LivePortraitEffects(pipe.src_imgs[0], pipe.src_infos[0][0][1])
+            if not face_swap_output:
+                live_preview.effects = LivePortraitEffects(
+                    pipe.src_imgs[0], pipe.src_infos[0][0][1]
+                )
             if use_clean_background:
                 live_preview.status = (
                     "Step out of frame, then press G to capture the clean room background."
                 )
             infer_cfg.infer_params.live_motion_smoothing = True
-            cv2.imshow("Render", cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR))
+            if not face_swap_output:
+                cv2.imshow("Render", cv2.cvtColor(pipe.src_imgs[0], cv2.COLOR_RGB2BGR))
         while realtime_capture is not None or vcap.isOpened():
             if realtime_capture is not None:
                 ret, frame = realtime_capture.read(timeout=1.0)
@@ -193,12 +235,13 @@ def run_with_video(args):
                     )
                     continue
                 effects = live_preview.effects
-                effects.handle_key(live_preview.last_key)
-                if live_preview.last_key in (ord("s"), ord("S")):
-                    live_preview.needs_reference = True
-                    live_preview.calibration_requested = False
-                if effects.selecting:
-                    live_preview.calibration_requested = False
+                if effects is not None:
+                    effects.handle_key(live_preview.last_key)
+                    if live_preview.last_key in (ord("s"), ord("S")):
+                        live_preview.needs_reference = True
+                        live_preview.calibration_requested = False
+                    if effects.selecting:
+                        live_preview.calibration_requested = False
                 infer_cfg.infer_params.live_head_motion = live_preview.head_enabled
                 if use_clean_background and clean_background is None:
                     cv2.imshow(
@@ -207,7 +250,12 @@ def run_with_video(args):
                     )
                     continue
                 if not live_preview.ready:
-                    cv2.imshow("Render", effects.selection_image(pipe.src_imgs[0]))
+                    cv2.imshow(
+                        "Render",
+                        frame.copy()
+                        if face_swap_output
+                        else effects.selection_image(pipe.src_imgs[0]),
+                    )
                     continue
                 # Re-detect rather than following stale landmarks on the background.
                 # This also reacquires the face after it leaves the camera view.
@@ -229,8 +277,24 @@ def run_with_video(args):
                 live_preview.show_camera(frame)
             if out_crop is None:
                 print(f"no face in driving frame:{frame_ind}")
+                if face_swap_output:
+                    cv2.imshow("Render", frame.copy())
                 continue
-            if live_preview is not None:
+            live_face_output = None
+            if face_swap_output:
+                crop_to_driver = pipe.last_driver_crop_to_original
+                if crop_to_driver is None or face_mask is None:
+                    raise RuntimeError(
+                        "The live face crop transform is unavailable; refusing to "
+                        "replace the webcam body/background with the source photo."
+                    )
+                live_face_output = composite_photo_face_on_driver(
+                    frame,
+                    out_crop,
+                    face_mask,
+                    crop_to_driver,
+                )
+            elif live_preview is not None and live_preview.effects is not None:
                 out_org = live_preview.effects.apply(
                     frame, out_org, dri_motion_info[0], reset=first_frame,
                     head_enabled=live_preview.head_enabled,
@@ -257,10 +321,18 @@ def run_with_video(args):
                 vout_org.write(out_org)
             else:
                 if infer_cfg.infer_params.flag_pasteback:
-                    if virtual_camera is not None:
-                        virtual_camera.send(out_org)
-                    out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
-                    cv2.imshow('Render', out_org)
+                    if face_swap_output:
+                        if virtual_camera is not None:
+                            virtual_camera.send(
+                                cv2.cvtColor(live_face_output, cv2.COLOR_BGR2RGB)
+                            )
+                        display_frame = live_face_output
+                    else:
+                        if virtual_camera is not None:
+                            virtual_camera.send(out_org)
+                        out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
+                        display_frame = out_org
+                    cv2.imshow("Render", display_frame)
                 else:
                     dri_crop = cv2.resize(dri_crop, (512, 512))
                     out_crop = np.concatenate([dri_crop, out_crop], axis=1)

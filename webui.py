@@ -627,8 +627,8 @@ footer { display: none !important; }
 CYBER_HEADER_HTML = """
 <header id="cyber-header">
     <div class="cyber-eyebrow">FasterLivePortrait / local inference console</div>
-    <h1>Your portrait. Your motion.</h1>
-    <p>Render a portrait from recorded motion, track a 3D avatar live, or work with an offline full-body clip. Choose a workspace in the navigation.</p>
+    <h1>Live face swap: photo identity, webcam scene.</h1>
+    <p>Use Avatar Studio desktop's Start live tracking action: it keeps the webcam's full body and background, and animates only the selected photo's face. The browser 3D avatar and offline full-body workspaces are separate experiments.</p>
 </header>
 """
 
@@ -641,7 +641,7 @@ WORKSPACE_NAVIGATION_HTML = """
             <span>Portrait workspace</span><small>Recorded motion → render</small>
         </button>
         <button type="button" role="tab" id="nav-live" aria-controls="live-avatar-page" aria-selected="false" tabindex="-1" data-workspace="live-avatar-page">
-            <span>Live 3D avatar</span><small>Continuous browser tracking</small>
+            <span>3D avatar experiment</span><small>Separate from live photo-face swap</small>
         </button>
         <button type="button" role="tab" id="nav-full-body" aria-controls="full-body-page" aria-selected="false" tabindex="-1" data-workspace="full-body-page">
             <span>Offline full body</span><small>Check inputs → render clip</small>
@@ -1344,12 +1344,17 @@ with gr.Blocks(
                 visible=False,
             )
 
-    with gr.Accordion("Live 3D avatar (prototype)", open=True, elem_id="live-avatar-page"):
+    with gr.Accordion(
+        "3D avatar experiment (separate from live face swap)",
+        open=True,
+        elem_id="live-avatar-page",
+    ):
         gr.Markdown(
-            "**Create your live avatar from one photo.** The app reconstructs a textured "
-            "model and prepares its humanoid animation automatically; you do not need to "
-            "open Blender or reload a rigged file. Camera frames stay in the browser. "
-            "The tracker and avatar libraries are downloaded from their public CDNs on first use."
+            "This is a separate experimental 3D route. The agreed live-camera behavior is "
+            "Deep-Live-Cam style: the webcam supplies the full body and background, while "
+            "the uploaded photo supplies the animated face. Use the desktop app's **Start "
+            "live tracking** action for that output. The 3D experiment below does not keep "
+            "the webcam body/background."
         )
         gr.Markdown(
             "### 1. Upload one full-body photo\n"
@@ -1603,12 +1608,11 @@ with gr.Blocks(
                 )
                 use_driver_background = gr.Checkbox(
                     value=False,
-                    label="Use webcam background (experimental)",
+                    label="Target photo person over driver background (offline)",
                     info=(
-                        "Locally removes the target photo background, then composites the target person "
-                        "over each webcam/video frame. Requires the Stable Fast 3D environment; the first "
-                        "use may download a local segmentation model. The driver's body may show around "
-                        "the cutout when framing or pose differs."
+                        "This keeps the entire target-photo body and replaces only its background. "
+                        "It is not the live face-swap mode. Live webcam tracking keeps the camera's "
+                        "full body/background and uses only the target photo's face."
                     ),
                 )
                 flag_virtual_camera_output = gr.Checkbox(

@@ -120,6 +120,7 @@ class FasterLivePortraitPipeline:
         self._target_canvas_tensor = None
         self._color_reference_key = None
         self._color_reference_tensors = None
+        self.last_driver_crop_to_original = None
 
     def calc_combined_eye_ratio(self, c_d_eyes_i, source_lmk):
         c_s_eyes = calc_eye_close_ratio(source_lmk[None])
@@ -615,6 +616,7 @@ class FasterLivePortraitPipeline:
         img_bgr = image
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         I_p_pstbk = self._get_target_canvas_tensor(img_src)
+        self.last_driver_crop_to_original = None
         realtime = kwargs.pop("realtime", False)
         if self.cfg.infer_params.flag_crop_driving_video:
             if self.src_lmk_pre is None:
@@ -648,6 +650,7 @@ class FasterLivePortraitPipeline:
                 flag_rot=False,
                 borderValue=(0, 0, 0),
             )
+            self.last_driver_crop_to_original = ret_dct["M_c2o"]
             lmk_crop = ret_dct["lmk_crop"]
             img_crop = ret_dct["img_crop"]
             img_crop = cv2.resize(img_crop, (256, 256))

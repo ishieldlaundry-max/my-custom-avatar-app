@@ -22,9 +22,15 @@ def resolve_camera_source(source):
 
 
 class LiveTrackingPreview:
-    def __init__(self, camera_index, allow_background_capture=False):
+    def __init__(
+        self,
+        camera_index,
+        allow_background_capture=False,
+        face_swap_mode=False,
+    ):
         self.camera_index = camera_index
         self.allow_background_capture = allow_background_capture
+        self.face_swap_mode = face_swap_mode
         self.background_capture_requested = False
         self.background_captured = False
         self.needs_reference = True
@@ -35,7 +41,11 @@ class LiveTrackingPreview:
         self.camera_height = 0
         self.buttons = []
         self.pending_actions = deque(maxlen=12)
-        self.status = "Hold a neutral face, eyes open. Press C to calibrate."
+        self.status = (
+            "Camera body/background stay live; photo face is animated. Press C to calibrate."
+            if face_swap_mode
+            else "Hold a neutral face, eyes open. Press C to calibrate."
+        )
         for title, x in (("Your camera", 20), ("Render", 690)):
             cv2.namedWindow(title, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(title, 640, 560)
@@ -59,14 +69,21 @@ class LiveTrackingPreview:
         canvas = np.zeros((self.camera_height + 132, 640, 3), dtype=np.uint8)
         canvas[:self.camera_height, :preview.shape[1]] = preview
         canvas[self.camera_height:] = (30, 26, 23)
-        labels = [
-            (ord("c"), "Calibrate (C)"),
-            (ord("h"), f"Head: {'ON' if self.head_enabled else 'OFF'} (H)"),
-            (ord("s"), "Set shoulders (S)"),
-            (ord("b"), "Shoulders off (B)"),
-            (ord("l"), f"Shading: {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} (L)"),
-            (ord("q"), "Stop tracking (Q)"),
-        ]
+        if self.face_swap_mode:
+            labels = [
+                (ord("c"), "Calibrate face (C)"),
+                (ord("h"), f"Head: {'ON' if self.head_enabled else 'OFF'} (H)"),
+                (ord("q"), "Stop tracking (Q)"),
+            ]
+        else:
+            labels = [
+                (ord("c"), "Calibrate (C)"),
+                (ord("h"), f"Head: {'ON' if self.head_enabled else 'OFF'} (H)"),
+                (ord("s"), "Set shoulders (S)"),
+                (ord("b"), "Shoulders off (B)"),
+                (ord("l"), f"Shading: {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} (L)"),
+                (ord("q"), "Stop tracking (Q)"),
+            ]
         if self.allow_background_capture:
             labels.insert(
                 5,
@@ -105,12 +122,20 @@ class LiveTrackingPreview:
             for index, (x, y) in enumerate(self.effects.driver_anchors):
                 point = (int((1 - x) * 640), int(y * preview.shape[0]))
                 cv2.circle(preview, point, 7, (0, 255, 255), 2)
-        lines = [
-            f"Camera {self.camera_index} | Mirrored input | C: calibrate | Q: quit",
-            self.status,
-            f"H: bounded head motion {'ON' if self.head_enabled else 'OFF'} | "
-            f"L: shading {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} | B: shoulders off",
-        ]
+        if self.face_swap_mode:
+            lines = [
+                f"Camera {self.camera_index} | Mirrored preview | C: calibrate | Q: quit",
+                self.status,
+                f"Photo face + live camera body/background | "
+                f"bounded head motion {'ON' if self.head_enabled else 'OFF'}",
+            ]
+        else:
+            lines = [
+                f"Camera {self.camera_index} | Mirrored input | C: calibrate | Q: quit",
+                self.status,
+                f"H: bounded head motion {'ON' if self.head_enabled else 'OFF'} | "
+                f"L: shading {'ON' if self.effects and self.effects.shadows_enabled else 'OFF'} | B: shoulders off",
+            ]
         if self.effects is not None:
             lines.append(self.effects.message)
         for index, line in enumerate(lines):
@@ -181,8 +206,16 @@ class LiveTrackingPreview:
 
     def tracking_result(self, detected):
         if not detected:
-            self.status = "No face detected. Portrait paused; look at the camera."
+            self.status = (
+                "No face detected; webcam body/background remain visible."
+                if self.face_swap_mode
+                else "No face detected. Portrait paused; look at the camera."
+            )
             return
         self.needs_reference = False
         self.calibration_requested = False
-        self.status = "Face tracked. Blink or open your mouth to compare."
+        self.status = (
+            "Photo face active; webcam body/background retained. Blink or speak to test expression."
+            if self.face_swap_mode
+            else "Face tracked. Blink or open your mouth to compare."
+        )
