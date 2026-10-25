@@ -72,7 +72,16 @@ def voice_shifter_page(tmp_path):
             registeredWorklets: [],
             nodes: [],
             connections: [],
-            disconnects: 0
+            disconnects: 0,
+            persistCleanup() {
+                localStorage.setItem(
+                    "voice-shifter-cleanup",
+                    JSON.stringify({
+                        trackStopped: this.trackStopped,
+                        contextState: this.contexts[0] ? this.contexts[0].state : null
+                    })
+                );
+            }
         };
 
         class FakeTrack {
@@ -116,7 +125,7 @@ def voice_shifter_page(tmp_path):
             constructor() {
                 this.state = "suspended";
                 this.destination = {};
-                this.audioWorklet = {
+                this._audioWorklet = {
                     addModule: async (moduleUrl) => {
                         const source = await fetch(moduleUrl).then((response) => response.text());
                         window.__audioTest.workletSources.push(source);
@@ -125,6 +134,11 @@ def voice_shifter_page(tmp_path):
                         }
                         if (!source.includes("this.ratio = 2.0")) {
                             throw new Error("the worklet is not configured for +12 semitones");
+                        }
+                        if (window.__audioTest.rejectWorklet) {
+                            const error = new Error("audio worklet initialization failed");
+                            error.name = window.__audioTest.workletErrorName;
+                            throw error;
                         }
                         window.__audioTest.registeredWorklets.push("cyber-pitch-shift");
                     }
@@ -143,9 +157,17 @@ def voice_shifter_page(tmp_path):
 
             close() {
                 this.state = "closed";
+                window.__audioTest.persistCleanup();
                 return Promise.resolve();
             }
         }
+
+        Object.defineProperty(FakeAudioContext.prototype, "audioWorklet", {
+            configurable: true,
+            get() {
+                return this._audioWorklet;
+            }
+        });
 
         class FakeAudioWorkletNode {
             constructor(context, name) {
@@ -198,6 +220,16 @@ def voice_shifter_page(tmp_path):
         });
         window.AudioContext = FakeAudioContext;
         window.AudioWorkletNode = FakeAudioWorkletNode;
+        window.__audioTest.setAudioWorkletSupport = (supported, missingPart = "both") => {
+            if (!supported) {
+                if (missingPart === "audioWorklet" || missingPart === "both") {
+                    delete FakeAudioContext.prototype.audioWorklet;
+                }
+                if (missingPart === "AudioWorkletNode" || missingPart === "both") {
+                    window.AudioWorkletNode = undefined;
+                }
+            }
+        };
         </script>
     """
 
@@ -212,6 +244,10 @@ def voice_shifter_page(tmp_path):
     </html>
     """
     (tmp_path / "index.html").write_text(page_source, encoding="utf-8")
+    (tmp_path / "after.html").write_text(
+        "<!doctype html><html><body>navigated away</body></html>",
+        encoding="utf-8",
+    )
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
