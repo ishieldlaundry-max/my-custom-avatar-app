@@ -68,6 +68,30 @@ def test_face_composite_maps_only_the_face_crop_to_its_camera_location():
     np.testing.assert_array_equal(result[12, 20], driver[12, 20])
 
 
+def test_face_composite_keeps_mask_and_crop_transform_resolution():
+    driver = np.full((20, 20, 3), (10, 20, 30), dtype=np.uint8)
+    photo_face = np.zeros((4, 4, 3), dtype=np.uint8)
+    photo_face[:, :, 0] = 255  # RGB red
+    mask = np.zeros((8, 8), dtype=np.float32)
+    mask[2:6, 2:6] = 1.0
+    crop_to_driver = np.array(
+        [[2.0, 0.0, 2.0], [0.0, 2.0, 3.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+    result = composite_photo_face_on_driver(
+        driver,
+        photo_face,
+        mask,
+        crop_to_driver,
+    )
+
+    # The mask/transform describe an 8x8 crop; the 4x4 generated output must
+    # be enlarged into that coordinate space before being mapped to the frame.
+    np.testing.assert_array_equal(result[10, 10], [0, 0, 255])
+    np.testing.assert_array_equal(result[5, 5], driver[5, 5])
+
+
 def test_live_pipeline_exposes_the_driver_crop_to_camera_transform():
     source = Path("src/pipelines/faster_live_portrait_pipeline.py").read_text(
         encoding="utf-8"

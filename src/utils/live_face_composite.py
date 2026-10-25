@@ -62,18 +62,26 @@ def composite_photo_face_on_driver(
             "The face-crop-to-camera transform must be a finite 2x3 or 3x3 matrix."
         )
 
-    crop_height, crop_width = generated_face_rgb.shape[:2]
     alpha = np.asarray(face_mask, dtype=np.float32)
     if alpha.ndim == 3:
         alpha = alpha[:, :, 0]
-    if alpha.shape != (crop_height, crop_width):
-        alpha = cv2.resize(
-            alpha, (crop_width, crop_height), interpolation=cv2.INTER_LINEAR
+    if alpha.ndim != 2 or min(alpha.shape) < 1:
+        raise ValueError("The face mask must be a non-empty 2-D array.")
+    if alpha.shape != generated_face_rgb.shape[:2]:
+        # M_c2o maps coordinates from the 512x512 driver crop to the camera
+        # frame, while LivePortrait's network output is 256x256. Keep the mask
+        # and affine transform in the same crop coordinate space by upscaling
+        # the generated face instead of shrinking the mask to the network size.
+        generated_face_rgb = cv2.resize(
+            generated_face_rgb,
+            (alpha.shape[1], alpha.shape[0]),
+            interpolation=cv2.INTER_CUBIC,
         )
     if alpha.max(initial=0) > 1.0:
         alpha = alpha / 255.0
     alpha = np.clip(alpha, 0.0, 1.0)
 
+    crop_height, crop_width = generated_face_rgb.shape[:2]
     height, width = driver_bgr.shape[:2]
     size = (width, height)
     face_bgr = cv2.cvtColor(generated_face_rgb, cv2.COLOR_RGB2BGR)
