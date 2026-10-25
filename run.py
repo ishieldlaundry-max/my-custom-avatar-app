@@ -42,7 +42,7 @@ from src.utils.virtual_camera import VirtualCameraBroadcaster
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
 from src.utils.live_face_composite import (
-    build_face_mask_from_image_landmarks,
+    build_face_mask,
     composite_photo_face_on_driver,
 )
 from src.utils.realtime_capture import LatestFrameCapture
@@ -136,18 +136,6 @@ def run_with_video(args):
     if fps <= 0:
         fps = 30
     h, w = pipe.src_imgs[0].shape[:2]
-    if face_swap_output:
-        face_landmarks = pipe.src_infos[0][0][1]
-        source_crop_to_image = pipe.src_infos[0][0][-1]
-        if hasattr(source_crop_to_image, "detach"):
-            source_crop_to_image = source_crop_to_image.detach().cpu().numpy()
-        face_mask = build_face_mask_from_image_landmarks(
-            face_landmarks,
-            source_crop_to_image,
-            (512, 512),
-        )
-    else:
-        face_mask = None
     if args.virtual_camera and face_swap_output:
         camera_width = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
         camera_height = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -295,11 +283,13 @@ def run_with_video(args):
             live_face_output = None
             if face_swap_output:
                 crop_to_driver = pipe.last_driver_crop_to_original
-                if crop_to_driver is None or face_mask is None:
+                driver_landmarks = pipe.last_driver_landmarks_in_crop
+                if crop_to_driver is None or driver_landmarks is None:
                     raise RuntimeError(
-                        "The live face crop transform is unavailable; refusing to "
-                        "replace the webcam body/background with the source photo."
+                        "The live face geometry is unavailable; refusing to "
+                        "composite a misaligned photo face."
                     )
+                face_mask = build_face_mask(driver_landmarks, (512, 512))
                 live_face_output = composite_photo_face_on_driver(
                     frame,
                     out_crop,

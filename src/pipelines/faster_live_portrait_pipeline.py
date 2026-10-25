@@ -121,6 +121,7 @@ class FasterLivePortraitPipeline:
         self._color_reference_key = None
         self._color_reference_tensors = None
         self.last_driver_crop_to_original = None
+        self.last_driver_landmarks_in_crop = None
 
     def calc_combined_eye_ratio(self, c_d_eyes_i, source_lmk):
         c_s_eyes = calc_eye_close_ratio(source_lmk[None])
@@ -622,6 +623,7 @@ class FasterLivePortraitPipeline:
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         I_p_pstbk = self._get_target_canvas_tensor(img_src)
         self.last_driver_crop_to_original = None
+        self.last_driver_landmarks_in_crop = None
         realtime = kwargs.pop("realtime", False)
         if self.cfg.infer_params.flag_crop_driving_video:
             if self.src_lmk_pre is None:
@@ -673,6 +675,9 @@ class FasterLivePortraitPipeline:
             lmk_crop = lmk.copy()
             img_crop = cv2.resize(img_rgb, (256, 256))
 
+        self.last_driver_landmarks_in_crop = np.asarray(
+            lmk_crop, dtype=np.float32
+        ).copy()
         input_eye_ratio = calc_eye_close_ratio(lmk_crop[None])
         input_lip_ratio = calc_lip_close_ratio(lmk_crop[None])
         pitch, yaw, roll, t, exp, scale, kp = self.model_dict["motion_extractor"].predict(img_crop)

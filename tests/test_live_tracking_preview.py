@@ -13,7 +13,6 @@ from src.utils import live_tracking_preview as preview
 from src.utils import live_portrait_effects as effects
 from src.utils.live_face_composite import (
     build_face_mask,
-    build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
 from src.pipelines import faster_live_portrait_pipeline as live_pipeline
@@ -222,6 +221,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
             [[1 / 64, 0, 0], [0, 1 / 64, 0], [0, 0, 1]],
             dtype=np.float32,
         ),
+        last_driver_landmarks_in_crop=None,
     )
     pipe.prepare_source = lambda *a, **k: True
     calls = []
@@ -233,6 +233,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
             [[1 / 64, 0, 0], [0, 1 / 64, 0], [0, 0, 1]],
             dtype=np.float32,
         )
+        pipe.last_driver_landmarks_in_crop = source_landmarks.copy()
         photo_face = np.zeros((512, 512, 3), dtype=np.uint8)
         photo_face[:] = (255, 0, 0)
         return (
@@ -250,7 +251,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         resolve_camera_source=preview.resolve_camera_source,
         LiveTrackingPreview=preview.LiveTrackingPreview,
         LivePortraitEffects=effects.LivePortraitEffects,
-        build_face_mask_from_image_landmarks=build_face_mask_from_image_landmarks,
+        build_face_mask=build_face_mask,
         composite_photo_face_on_driver=composite_photo_face_on_driver,
         LatestFrameCapture=lambda _: reader, cv2=cv, np=np,
         os=__import__("os"), time=time, datetime=datetime, deque=deque,
@@ -279,4 +280,7 @@ def test_live_loop_uses_current_frame_and_fresh_detection(monkeypatch, tmp_path)
         if call.args[0] == "Render"
     ]
     np.testing.assert_array_equal(render_frames[-1][0, 0], [3, 3, 3])
-    np.testing.assert_array_equal(render_frames[-1][4, 4], [0, 0, 255])
+    face_pixel = render_frames[-1][4, 4]
+    assert face_pixel[2] > 100
+    assert face_pixel[2] > face_pixel[0] + 60
+    assert face_pixel[2] > face_pixel[1] + 60

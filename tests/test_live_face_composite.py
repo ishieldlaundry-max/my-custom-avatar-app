@@ -61,6 +61,7 @@ def test_face_composite_preserves_webcam_body_and_background():
         photo_face,
         mask,
         np.eye(3, dtype=np.float32),
+        color_match_strength=0.0,
     )
 
     np.testing.assert_array_equal(result[0, 0], driver[0, 0])
@@ -83,6 +84,7 @@ def test_face_composite_maps_only_the_face_crop_to_its_camera_location():
         photo_face,
         mask,
         crop_to_driver,
+        color_match_strength=0.0,
     )
 
     np.testing.assert_array_equal(result[0, 0], driver[0, 0])
@@ -106,12 +108,29 @@ def test_face_composite_keeps_mask_and_crop_transform_resolution():
         photo_face,
         mask,
         crop_to_driver,
+        color_match_strength=0.0,
     )
 
     # The mask/transform describe an 8x8 crop; the 4x4 generated output must
     # be enlarged into that coordinate space before being mapped to the frame.
     np.testing.assert_array_equal(result[10, 10], [0, 0, 255])
     np.testing.assert_array_equal(result[5, 5], driver[5, 5])
+
+
+def test_face_composite_matches_live_camera_color_in_the_face_crop():
+    driver = np.full((16, 16, 3), (60, 80, 100), dtype=np.uint8)  # BGR
+    photo_face = np.full((16, 16, 3), (200, 160, 120), dtype=np.uint8)  # RGB
+    mask = np.ones((16, 16), dtype=np.float32)
+
+    result = composite_photo_face_on_driver(
+        driver,
+        photo_face,
+        mask,
+        np.eye(3, dtype=np.float32),
+        color_match_strength=1.0,
+    )
+
+    np.testing.assert_allclose(result[8, 8], driver[8, 8], atol=2)
 
 
 def test_live_pipeline_exposes_the_driver_crop_to_camera_transform():
@@ -121,6 +140,7 @@ def test_live_pipeline_exposes_the_driver_crop_to_camera_transform():
 
     assert "self.last_driver_crop_to_original = ret_dct[\"M_c2o\"]" in source
     assert "self.last_driver_crop_to_original = None" in source
+    assert "self.last_driver_landmarks_in_crop = np.asarray(" in source
 
 
 @pytest.mark.parametrize(
