@@ -39,7 +39,41 @@ from colorama import Fore, Back, Style
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
-from src.utils.realtime_capture import LatestFrameCapture, RollingRealtimeMetrics
+from src.utils.realtime_capture import LatestFrameCapture
+try:
+    from src.utils.realtime_capture import RollingRealtimeMetrics
+except ImportError:
+    # Older Windows checkouts have LatestFrameCapture but predate this metrics
+    # helper. Keep the live skeletal entry point importable on those versions.
+    class RollingRealtimeMetrics:
+        """Keep bounded timing samples for the optional realtime overlay."""
+
+        def __init__(self, window_size=60):
+            if window_size < 1:
+                raise ValueError("window_size must be at least 1")
+            self._inference_times = deque(maxlen=window_size)
+            self._processing_times = deque(maxlen=window_size)
+
+        def add(self, inference_seconds, processing_seconds):
+            self._inference_times.append(max(0.0, float(inference_seconds)))
+            self._processing_times.append(max(0.0, float(processing_seconds)))
+
+        @property
+        def inference_fps(self):
+            total = sum(self._inference_times)
+            return len(self._inference_times) / total if total > 0 else 0.0
+
+        @property
+        def processing_ms(self):
+            if not self._processing_times:
+                return 0.0
+            return 1000.0 * sum(self._processing_times) / len(self._processing_times)
+
+        def label(self):
+            return (
+                f"Inference: {self.inference_fps:.1f} FPS | "
+                f"Processing: {self.processing_ms:.1f} ms"
+            )
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
 from src.utils.live_skeletal_preview import LiveSkeletalPreview
