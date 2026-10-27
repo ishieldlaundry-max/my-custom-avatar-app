@@ -128,11 +128,44 @@ def main():
         window.load_html("<html><body><h2>Live face swap started</h2><p>Look for the "
                          "live camera and face-swap windows. If none appears, open logs from the App menu. "
                          "Restart Avatar Studio to return to the workspace.</p></body></html>")
-        def watch_live():
-            code = live.wait()
-            if code and not stopped.is_set():
-                notice(f"Live tracking stopped with an error. See {logs / ('live-' + stamp + '.log')}")
-        threading.Thread(target=watch_live, daemon=True).start()
+        threading.Thread(target=watch_live, args=(live, "live"), daemon=True).start()
+
+    def start_skeletal_tracking():
+        nonlocal live
+        if live and live.poll() is None:
+            notice("Live tracking is already running. Use Stop live tracking first.")
+            return
+        if not window.create_confirmation_dialog(
+            "Start native skeletal tracking",
+            "This closes the workspace server to free GPU memory. The webcam will be "
+            "tracked locally with CUDA DWPose; no portrait is used. Press C to calibrate "
+            "and Q to stop. Depth is an approximate body-scale estimate, not a measurement. "
+            "Close other webcam apps first. Continue?"
+        ):
+            return
+        stop_process(server)
+        live = start_process(
+            ["run.py", "--skeletal_tracking", "--require-nvidia", "--dri_video", "0"],
+            "skeletal",
+        )
+        window.load_html(
+            "<html><body><h2>Native skeletal tracking started</h2>"
+            "<p>Look for the camera and approximate 3D skeleton windows. Press C in a "
+            "neutral full-body pose to calibrate; press Q to stop. Depth is estimated "
+            "from body scale. If no windows appear, open the App menu logs. Restart "
+            "Avatar Studio to return to the workspace.</p></body></html>"
+        )
+        threading.Thread(
+            target=watch_live, args=(live, "skeletal"), daemon=True
+        ).start()
+
+    def watch_live(process, label):
+        code = process.wait()
+        if code and not stopped.is_set():
+            notice(
+                f"Live tracking stopped with an error. "
+                f"See {logs / (label + '-' + stamp + '.log')}"
+            )
 
     def wait_for_server():
         deadline = time.monotonic() + 240
@@ -158,6 +191,7 @@ def main():
 
     menu = [Menu("App", [
         MenuAction("Start live portrait from photo", guarded(start_live)),
+        MenuAction("Start native skeletal tracking", guarded(start_skeletal_tracking)),
         MenuAction("Stop live tracking", guarded(lambda: stop_process(live))),
         MenuAction("Open logs", guarded(lambda: os.startfile(str(logs)))),
         MenuAction("Exit", window.destroy),

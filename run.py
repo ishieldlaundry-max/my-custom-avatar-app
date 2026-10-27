@@ -39,13 +39,15 @@ from colorama import Fore, Back, Style
 from src.pipelines.faster_live_portrait_pipeline import FasterLivePortraitPipeline
 from src.utils.utils import video_has_audio
 from src.utils.virtual_camera import VirtualCameraBroadcaster
+from src.utils.realtime_capture import LatestFrameCapture, RollingRealtimeMetrics
 from src.utils.live_tracking_preview import LiveTrackingPreview, resolve_camera_source
 from src.utils.live_portrait_effects import LivePortraitEffects
+from src.utils.live_skeletal_preview import LiveSkeletalPreview
+from src.utils.live_skeletal_tracking import LatestSkeletalInference
 from src.utils.live_face_composite import (
-    build_face_mask,
+    build_face_mask_from_image_landmarks,
     composite_photo_face_on_driver,
 )
-from src.utils.realtime_capture import LatestFrameCapture
 from src.utils.driver_background import (
     DriverBackgroundError,
     composite_target_over_driver_background,
@@ -136,6 +138,18 @@ def run_with_video(args):
     if fps <= 0:
         fps = 30
     h, w = pipe.src_imgs[0].shape[:2]
+    if face_swap_output:
+        face_landmarks = pipe.src_infos[0][0][1]
+        source_crop_to_image = pipe.src_infos[0][0][-1]
+        if hasattr(source_crop_to_image, "detach"):
+            source_crop_to_image = source_crop_to_image.detach().cpu().numpy()
+        face_mask = build_face_mask_from_image_landmarks(
+            face_landmarks,
+            source_crop_to_image,
+            (512, 512),
+        )
+    else:
+        face_mask = None
     if args.virtual_camera and face_swap_output:
         camera_width = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
         camera_height = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -169,6 +183,11 @@ def run_with_video(args):
         vout_org = cv2.VideoWriter(vsave_org_path, fourcc, fps, (w, h))
 
     infer_times = deque(maxlen=300) if args.realtime else []
+    live_metrics = (
+        RollingRealtimeMetrics(args.metrics_window)
+        if args.realtime and args.realtime_metrics
+        else None
+    )
     motion_lst = []
     c_eyes_lst = []
     c_lip_lst = []
@@ -260,7 +279,8 @@ def run_with_video(args):
                 # Re-detect rather than following stale landmarks on the background.
                 # This also reacquires the face after it leaves the camera view.
                 pipe.src_lmk_pre = None
-            t0 = time.time()
+            frame_started = time.perf_counter()
+            t0 = time.perf_counter()
             first_frame = frame_ind == 0 or (
                 live_preview is not None and live_preview.needs_reference
             )
@@ -283,13 +303,11 @@ def run_with_video(args):
             live_face_output = None
             if face_swap_output:
                 crop_to_driver = pipe.last_driver_crop_to_original
-                driver_landmarks = pipe.last_driver_landmarks_in_crop
-                if crop_to_driver is None or driver_landmarks is None:
+                if crop_to_driver is None or face_mask is None:
                     raise RuntimeError(
-                        "The live face geometry is unavailable; refusing to "
-                        "composite a misaligned photo face."
+                        "The live face crop transform is unavailable; refusing to "
+                        "replace the webcam body/background with the source photo."
                     )
-                face_mask = build_face_mask(driver_landmarks, (512, 512))
                 live_face_output = composite_photo_face_on_driver(
                     frame,
                     out_crop,
@@ -313,7 +331,8 @@ def run_with_video(args):
                 c_eyes_lst.append(dri_motion_info[1])
                 c_lip_lst.append(dri_motion_info[2])
 
-            infer_times.append(time.time() - t0)
+            inference_seconds = time.perf_counter() - t0
+            infer_times.append(inference_seconds)
             if not args.realtime:
                 dri_crop = cv2.resize(dri_crop, (512, 512))
                 out_crop = np.concatenate([dri_crop, out_crop], axis=1)
@@ -334,12 +353,37 @@ def run_with_video(args):
                             virtual_camera.send(out_org)
                         out_org = cv2.cvtColor(out_org, cv2.COLOR_RGB2BGR)
                         display_frame = out_org
-                    cv2.imshow("Render", display_frame)
                 else:
                     dri_crop = cv2.resize(dri_crop, (512, 512))
                     out_crop = np.concatenate([dri_crop, out_crop], axis=1)
                     out_crop = cv2.cvtColor(out_crop, cv2.COLOR_RGB2BGR)
-                    cv2.imshow('Render', out_crop)
+                    display_frame = out_crop
+                if live_metrics is not None:
+                    live_metrics.add(
+                        inference_seconds,
+                        time.perf_counter() - frame_started,
+                    )
+                    cv2.putText(
+                        display_frame,
+                        live_metrics.label(),
+                        (12, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.65,
+                        (0, 0, 0),
+                        4,
+                        cv2.LINE_AA,
+                    )
+                    cv2.putText(
+                        display_frame,
+                        live_metrics.label(),
+                        (12, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.65,
+                        (255, 255, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
+                cv2.imshow('Render', display_frame)
                 if live_preview is None and cv2.waitKey(1) & 0xFF == ord('q'):
                     break
     except BaseException:
@@ -405,6 +449,82 @@ def run_with_video(args):
         with open(template_pkl_path, "wb") as fw:
             pickle.dump(template_dct, fw)
         print(f"save driving motion pkl file at : {template_pkl_path}")
+
+
+def run_skeletal_tracking(args):
+    """Run CUDA-only DWPose in a separate worker without changing face-swap mode."""
+    if args.virtual_camera:
+        raise ValueError("--virtual_camera is not available in native skeletal mode.")
+    is_webcam, capture_source = resolve_camera_source(args.dri_video)
+    if not is_webcam:
+        raise ValueError(
+            "Native skeletal tracking requires a live camera index. "
+            "Use --dri_video 0 (or another camera index)."
+        )
+
+    print(
+        "Native skeletal mode: CUDA DWPose | C calibrate | Q exit | "
+        "2.5D depth is estimated from body scale, not measured.",
+        flush=True,
+    )
+    camera = cv2.VideoCapture(capture_source)
+    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    camera.set(cv2.CAP_PROP_FPS, 30)
+    if not camera.isOpened():
+        camera.release()
+        raise RuntimeError(f"Could not open webcam {capture_source}.")
+
+    capture = None
+    inference = None
+    preview = None
+    last_frame = None
+    try:
+        capture = LatestFrameCapture(camera).start()
+        inference = LatestSkeletalInference().start()
+        preview = LiveSkeletalPreview(capture_source)
+        while True:
+            ok, frame = capture.read(timeout=0.02)
+            if ok and frame is not None:
+                last_frame = frame
+                inference.submit(frame, time.perf_counter_ns() // 1_000_000)
+
+            snapshot = inference.snapshot()
+            if snapshot["error"]:
+                raise RuntimeError(
+                    "Native skeletal tracking failed: " + snapshot["error"]
+                )
+            if last_frame is None:
+                continue
+            preview.show(
+                last_frame,
+                snapshot["frame"],
+                snapshot["status"],
+                snapshot["inference_ms"],
+                snapshot["dropped_frames"],
+            )
+            action = preview.poll()
+            if action == "quit":
+                break
+            if action == "calibrate":
+                inference.request_calibration()
+            if capture.ended:
+                raise RuntimeError("The webcam stopped sending frames.")
+    finally:
+        if inference is not None:
+            inference.close()
+        if capture is not None:
+            capture.close()
+        else:
+            camera.release()
+        if preview is not None:
+            try:
+                preview.close()
+            except cv2.error:
+                cv2.destroyAllWindows()
+        else:
+            cv2.destroyAllWindows()
 
 
 def run_with_pkl(args):
@@ -554,6 +674,11 @@ if __name__ == '__main__':
                         help='driving video')
     parser.add_argument('--cfg', required=False, type=str, default="configs/onnx_infer.yaml", help='inference config')
     parser.add_argument('--realtime', action='store_true', help='realtime inference')
+    parser.add_argument(
+        '--skeletal_tracking',
+        action='store_true',
+        help='run native CUDA-only body, hand, and face tracking in OpenCV',
+    )
     parser.add_argument('--require-nvidia', action='store_true',
                         help='Refuse CPU/Intel inference; require NVIDIA CUDA')
     parser.add_argument('--animal', action='store_true', help='use animal model')
@@ -565,12 +690,30 @@ if __name__ == '__main__':
     )
     parser.add_argument('--virtual_camera', action='store_true',
                         help='broadcast composited realtime frames as a system webcam')
+    parser.add_argument(
+        '--no_realtime_metrics',
+        action='store_false',
+        dest='realtime_metrics',
+        help='disable the rolling FPS and processing-time overlay',
+    )
+    parser.add_argument(
+        '--metrics_window',
+        type=int,
+        default=60,
+        help='number of realtime frames used for rolling metrics (default: 60)',
+    )
     args, unknown = parser.parse_known_args()
     if args.require_nvidia or os.name == "nt":
         from src.utils.nvidia_runtime import enforce_nvidia_runtime
         enforce_nvidia_runtime()
+    if args.metrics_window < 1:
+        parser.error("--metrics_window must be at least 1")
 
-    if args.dri_video.endswith(".pkl"):
+    if args.skeletal_tracking:
+        if args.dri_video == "assets/examples/driving/d14.mp4":
+            args.dri_video = "0"
+        run_skeletal_tracking(args)
+    elif args.dri_video.endswith(".pkl"):
         run_with_pkl(args)
     else:
         run_with_video(args)
