@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import statistics
 import subprocess
 import sys
 import time
@@ -163,49 +165,106 @@ def _make_quality_preview(video_path: Path | None, preview_path: Path) -> str | 
 
 
 def _run_step_comparison(args: argparse.Namespace) -> int:
-    """Run baseline/candidate step counts into separate benchmark folders."""
+    """Run each step setting repeatedly and preserve every individual report."""
     steps = args.compare_steps
+    repetitions = getattr(args, "repetitions", 1)
     if steps[0] == steps[1]:
         raise ValueError("Choose two different denoising-step values to compare.")
     if any(step < 1 or step > 50 for step in steps):
         raise ValueError("Denoising steps must be between 1 and 50.")
+    if not 1 <= repetitions <= 5:
+        raise ValueError("Repetitions must be between 1 and 5.")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     runs = []
     return_codes = []
+    runs_by_steps = {step_count: [] for step_count in steps}
+    for repetition in range(1, repetitions + 1):
+        for step_count in steps:
+            run_dir = (
+                args.output_dir
+                / f"steps_{step_count}"
+                / f"repetition_{repetition:02d}"
+            )
+            command = [
+                sys.executable,
+                str(Path(__file__).resolve()),
+                "--source-image",
+                str(args.source_image),
+                "--driving-video",
+                str(args.driving_video),
+                "--output-dir",
+                str(run_dir),
+                "--resolution",
+                str(args.resolution),
+                "--steps",
+                str(step_count),
+                "--sample-seconds",
+                str(args.sample_seconds),
+            ]
+            if args.fps is not None:
+                command.extend(["--fps", str(args.fps)])
+            result = subprocess.run(command, check=False)
+            return_codes.append(result.returncode)
+            report_path = run_dir / "benchmark.json"
+            try:
+                report = (
+                    json.loads(report_path.read_text(encoding="utf-8"))
+                    if report_path.is_file()
+                    else {}
+                )
+            except json.JSONDecodeError:
+                report = {}
+            run = {
+                **report,
+                "steps": step_count,
+                "repetition": repetition,
+                "run_dir": str(run_dir),
+                "return_code": result.returncode,
+            }
+            runs.append(run)
+            runs_by_steps[step_count].append(run)
+
+    settings = []
     for step_count in steps:
-        run_dir = args.output_dir / f"steps_{step_count}"
-        command = [
-            sys.executable,
-            str(Path(__file__).resolve()),
-            "--source-image",
-            str(args.source_image),
-            "--driving-video",
-            str(args.driving_video),
-            "--output-dir",
-            str(run_dir),
-            "--resolution",
-            str(args.resolution),
-            "--steps",
-            str(step_count),
-            "--sample-seconds",
-            str(args.sample_seconds),
+        setting_runs = runs_by_steps[step_count]
+        successful_wall_times = [
+            float(run["wall_seconds"])
+            for run in setting_runs
+            if run.get("return_code") == 0
+            and isinstance(run.get("wall_seconds"), (int, float))
+            and math.isfinite(float(run["wall_seconds"]))
         ]
-        if args.fps is not None:
-            command.extend(["--fps", str(args.fps)])
-        result = subprocess.run(command, check=False)
-        return_codes.append(result.returncode)
-        report_path = run_dir / "benchmark.json"
-        report = (
-            json.loads(report_path.read_text(encoding="utf-8"))
-            if report_path.is_file()
-            else {}
+        peak_memory_values = [
+            int(run["peak_memory_used_mb"])
+            for run in setting_runs
+            if isinstance(run.get("peak_memory_used_mb"), (int, float))
+            and math.isfinite(float(run["peak_memory_used_mb"]))
+        ]
+        settings.append(
+            {
+                "steps": step_count,
+                "repetitions_requested": repetitions,
+                "successful_runs": sum(
+                    run.get("return_code") == 0 for run in setting_runs
+                ),
+                "median_wall_seconds": (
+                    round(statistics.median(successful_wall_times), 3)
+                    if successful_wall_times
+                    else None
+                ),
+                "highest_peak_memory_used_mb": (
+                    max(peak_memory_values) if peak_memory_values else None
+                ),
+                "runs": setting_runs,
+            }
         )
-        runs.append({"steps": step_count, **report})
 
     comparison = {
         "resolution": args.resolution,
         "comparison": "Denoising steps at fixed resolution",
+        "repetitions_per_setting": repetitions,
+        "settings": settings,
         "runs": runs,
         "visual_review": {
             "contact_sheets": [
@@ -251,6 +310,12 @@ def main() -> int:
         help="Run two denoising-step settings sequentially and save a comparison report.",
     )
     parser.add_argument(
+        "--repetitions",
+        default=1,
+        type=int,
+        help="Runs per setting with --compare-steps (1-5; default: 1).",
+    )
+    parser.add_argument(
         "--visual-notes",
         default="",
         help="Optional manual observations to save in quality-comparison.json.",
@@ -264,6 +329,10 @@ def main() -> int:
     parser.add_argument("--sample-seconds", default=1.0, type=float)
     args = parser.parse_args()
 
+    if not 1 <= args.repetitions <= 5:
+        parser.error("--repetitions must be between 1 and 5.")
+    if args.repetitions > 1 and not args.compare_steps:
+        parser.error("--repetitions requires --compare-steps.")
     if args.compare_steps:
         return _run_step_comparison(args)
 
