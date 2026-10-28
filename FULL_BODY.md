@@ -109,19 +109,25 @@ python benchmark_full_body.py ^
   --output-dir results\full_body_quality_384 ^
   --resolution 384 ^
   --compare-steps 15 20 ^
+  --repetitions 3 ^
   --sample-seconds 0.25
 ```
 
-This runs the settings sequentially in separate `steps_15` and `steps_20`
-folders. Each `benchmark.json` records denoising steps, wall time, sampled peak
-VRAM, and output video metadata. Each run saves `quality-samples.png` with three
-evenly spaced full-frame samples. When the isolated MimicMotion DWPose
-environment finds enough confident landmarks, it also saves `quality-details.png`
-with enlarged face and hand crops from those same frames. Uncertain or ambiguous
-regions are omitted; no crop is an automatic quality score. The parent folder
-receives `quality-comparison.json`, which links both reports and both sample
-sheets. Add `--visual-notes "..."` to save your observations in the comparison
-report.
+This runs each setting three times, alternating settings by repetition, with the
+same target, driver, and resolution. The default is one run per setting; set
+`--repetitions` from 1 to 5 to choose how many runs. Three repetitions launch
+six full renders and may take several hours on the 8 GB GPU.
+
+Each run has a separate folder such as
+`steps_15\repetition_01`. Its `benchmark.json`, rendered MP4,
+`quality-samples.png`, and optional `quality-details.png` remain available for
+review. The parent `quality-comparison.json` includes every run and, for each
+step setting, the median successful render time and highest sampled peak VRAM.
+It links all full-frame and detail sheets. When the isolated MimicMotion DWPose
+environment finds enough confident landmarks, the detail sheet includes
+enlarged face and hand crops; uncertain or ambiguous regions are omitted, and no
+crop is an automatic quality score. Add `--visual-notes "..."` to save your
+observations in the comparison report.
 Review the samples and VRAM headroom on the Alienware before changing the
 default; a lower render resolution or extra denoising steps are not assumed to
 improve quality without that measured review.
