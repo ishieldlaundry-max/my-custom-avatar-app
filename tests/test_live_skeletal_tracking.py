@@ -10,7 +10,11 @@ from src.utils.live_skeletal_tracking import (
     LatestSkeletalInference,
     SkeletalPoseMapper,
 )
-from src.utils.live_skeletal_preview import render_camera_view, render_skeleton_view
+from src.utils.live_skeletal_preview import (
+    LiveSkeletalPreview,
+    render_camera_view,
+    render_skeleton_view,
+)
 
 
 BODY_POINTS = np.array(
@@ -104,13 +108,31 @@ def test_mapper_tracks_relative_translation_and_scale_depth():
 
     moved = mapper.update(make_pose(x_shift=0.10, scale_y=0.90), 100, (480, 640, 3))
 
-    assert moved.root_translation[0] > 0.04
+    assert moved.root_translation[0] > 0.03
     assert moved.root_translation[2] > 0.02
     assert moved.root_translation[2] < 0.2
     assert moved.landmarks["nose"][0] == pytest.approx(
         baseline.landmarks["nose"][0], abs=0.01
     )
     assert moved.landmarks["nose"][2] == pytest.approx(0.0)
+
+
+def test_mapper_suppresses_stationary_pose_jitter():
+    mapper = SkeletalPoseMapper()
+    mapper.calibrate(make_pose())
+    baseline = mapper.update(make_pose(), 67, (480, 640, 3))
+
+    slightly_shifted = mapper.update(
+        make_pose(x_shift=0.005), 100, (480, 640, 3)
+    )
+
+    assert slightly_shifted.root_translation == pytest.approx(
+        baseline.root_translation, abs=1e-6
+    )
+    assert abs(
+        slightly_shifted.image_landmarks["nose"][0]
+        - baseline.image_landmarks["nose"][0]
+    ) < 0.001
 
 
 def test_mapper_handles_tracking_loss_with_confidence_aware_recovery():
@@ -298,3 +320,25 @@ def test_preview_renderers_return_camera_and_skeleton_images():
     assert camera_view.shape == camera.shape
     assert skeleton_view.shape == (640, 640, 3)
     assert np.any(skeleton_view != (20, 24, 31))
+
+def test_skeletal_preview_v_key_requests_next_camera(monkeypatch):
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_preview.cv2.namedWindow", lambda *_: None
+    )
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_preview.cv2.resizeWindow", lambda *_: None
+    )
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_preview.cv2.moveWindow", lambda *_: None
+    )
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_preview.cv2.waitKey", lambda _: ord("v")
+    )
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_preview.cv2.getWindowProperty",
+        lambda *_: 1,
+    )
+
+    preview = LiveSkeletalPreview(0)
+
+    assert preview.poll() == "next_camera"
