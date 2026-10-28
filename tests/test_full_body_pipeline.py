@@ -20,6 +20,7 @@ from src.pipelines.full_body_animation_pipeline import (
     match_driver_output_fps,
     _read_driver_fps,
 )
+from src.utils.gradio_file_links import format_cancelled_render_status
 
 
 def _fake_backend(tmp_path: Path) -> tuple[MimicMotionBackend, Path, Path]:
@@ -308,6 +309,7 @@ def test_cancel_stops_runner_and_preserves_log_and_existing_output(tmp_path):
     cancelled_log = attempt_logs[0]
     assert "runner attempt 1 started" in cancelled_log.read_text(encoding="utf-8")
     assert str(cancelled_log) in str(cancelled_error)
+    assert cancelled_error.log_path == cancelled_log.resolve()
 
     retry_output = backend.render(
         source_image,
@@ -323,6 +325,53 @@ def test_cancel_stops_runner_and_preserves_log_and_existing_output(tmp_path):
     retry_log = next(path for path in attempt_logs if path != cancelled_log)
     assert "runner attempt 2 started" in retry_log.read_text(encoding="utf-8")
     assert str(cancelled_log) in str(cancelled_error)
+
+
+def test_cancelled_status_links_only_the_retained_log_with_spaces(tmp_path):
+    output_dir = tmp_path / "Jane Doe" / "full body renders"
+    output_dir.mkdir(parents=True)
+    log_path = output_dir / "mimicmotion-attempt-1.log"
+    log_path.write_text("cancelled runner output", encoding="utf-8")
+    allowed_paths = ["assets"]
+    message = (
+        f"Full-body render cancelled. This attempt's log is preserved at {log_path}. "
+        f"Existing and partial output files remain in {output_dir}."
+    )
+
+    status = format_cancelled_render_status(
+        message,
+        log_path,
+        allowed_paths=allowed_paths,
+        allowed_root=output_dir,
+    )
+
+    encoded_path = str(log_path.resolve()).replace(" ", "%20")
+    assert "**Render cancelled.**" in status
+    assert f"[`{log_path.resolve()}`](/gradio_api/file={encoded_path})" in status
+    assert "Existing and partial output files remain" in status
+    assert "Jane Doe" in status and "full body renders" in status
+    assert allowed_paths == ["assets", str(log_path.resolve())]
+
+
+def test_cancelled_status_does_not_link_log_outside_allowed_root(tmp_path):
+    allowed_root = tmp_path / "results" / "full_body"
+    outside_log = tmp_path / "private" / "mimicmotion-](javascript.log"
+    outside_log.parent.mkdir(parents=True)
+    outside_log.write_text("private", encoding="utf-8")
+    allowed_paths = []
+    message = f"Render cancelled. Log is at {outside_log}."
+
+    status = format_cancelled_render_status(
+        message,
+        outside_log,
+        allowed_paths=allowed_paths,
+        allowed_root=allowed_root,
+    )
+
+    assert f"[`{outside_log.resolve()}`]" not in status
+    assert r"javascript\.log" in status
+    assert "](" not in status
+    assert allowed_paths == []
 
 
 def test_missing_model_assets_are_actionable(tmp_path):
@@ -536,12 +585,12 @@ def test_pose_check_reports_the_configured_timeout(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         "src.pipelines.full_body_animation_pipeline.DWPOSE_PREFLIGHT_TIMEOUT_SECONDS",
-        0.05,
+        0.5,
     )
 
     warnings = backend.inspect_driver_video(video)
 
-    assert any("timed out after 0.05 seconds" in warning for warning in warnings)
+    assert any("timed out after 0.5 seconds" in warning for warning in warnings)
     assert any("Last reported status: DWPose progress: 2/12." in warning for warning in warnings)
 
 
