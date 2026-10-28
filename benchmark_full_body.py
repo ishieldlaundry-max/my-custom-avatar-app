@@ -175,6 +175,28 @@ def _run_step_comparison(args: argparse.Namespace) -> int:
     if not 1 <= repetitions <= 5:
         raise ValueError("Repetitions must be between 1 and 5.")
 
+    run_dirs = [
+        args.output_dir
+        / f"steps_{step_count}"
+        / f"repetition_{repetition:02d}"
+        for step_count in steps
+        for repetition in range(1, repetitions + 1)
+    ]
+    occupied_run_dirs = [
+        str(run_dir)
+        for run_dir in run_dirs
+        if run_dir.is_file()
+        or (
+            run_dir.is_dir()
+            and next(run_dir.iterdir(), None) is not None
+        )
+    ]
+    if occupied_run_dirs:
+        raise ValueError(
+            "Comparison output already contains repetition data. Choose a new "
+            f"--output-dir to preserve it: {', '.join(occupied_run_dirs)}"
+        )
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     runs = []
     return_codes = []
