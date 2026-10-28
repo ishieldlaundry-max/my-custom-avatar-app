@@ -497,7 +497,7 @@ def run_skeletal_tracking(args):
         )
 
     print(
-        "Native skeletal mode: CUDA DWPose | C calibrate | Q exit | "
+        "Native skeletal mode: CUDA DWPose | V next camera | C calibrate | Q exit | "
         "2.5D depth is estimated from body scale, not measured.",
         flush=True,
     )
@@ -543,6 +543,43 @@ def run_skeletal_tracking(args):
                 break
             if action == "calibrate":
                 inference.request_calibration()
+            if action == "next_camera":
+                switched = False
+                for offset in range(1, 10):
+                    candidate_index = (capture_source + offset) % 10
+                    if candidate_index == capture_source:
+                        continue
+                    candidate_camera = cv2.VideoCapture(candidate_index)
+                    candidate_camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    candidate_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    candidate_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    candidate_camera.set(cv2.CAP_PROP_FPS, 30)
+                    if not candidate_camera.isOpened():
+                        candidate_camera.release()
+                        continue
+                    candidate_capture = LatestFrameCapture(candidate_camera)
+                    try:
+                        candidate_capture.start(timeout=0.8)
+                    except Exception:
+                        candidate_capture.close()
+                        continue
+                    capture.close()
+                    capture = candidate_capture
+                    capture_source = candidate_index
+                    preview.camera_index = candidate_index
+                    inference.request_mapper_reset()
+                    last_frame = None
+                    print(
+                        f"Selected webcam {candidate_index}; press C to calibrate.",
+                        flush=True,
+                    )
+                    switched = True
+                    break
+                if not switched:
+                    print(
+                        "No other working camera found (checked indices 0-9).",
+                        flush=True,
+                    )
             if capture.ended:
                 raise RuntimeError("The webcam stopped sending frames.")
     finally:
