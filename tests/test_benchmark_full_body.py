@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from benchmark_full_body import (
@@ -224,4 +225,35 @@ def test_step_comparison_preserves_each_repetition_and_aggregates_median_and_vra
         (Path(run["run_dir"]) / "quality-details.png").is_file()
         for run in report["runs"]
     )
+
+
+def test_step_comparison_refuses_to_overwrite_existing_repetition_data(
+    tmp_path,
+    monkeypatch,
+):
+    existing_run = tmp_path / "comparison" / "steps_15" / "repetition_01"
+    existing_run.mkdir(parents=True)
+    (existing_run / "render.mp4").write_bytes(b"keep")
+    commands = []
+    monkeypatch.setattr(
+        "benchmark_full_body.subprocess.run",
+        lambda command, check: commands.append(command),
+    )
+    args = Namespace(
+        compare_steps=[15, 20],
+        output_dir=tmp_path / "comparison",
+        source_image=Path("target.png"),
+        driving_video=Path("driver.mp4"),
+        resolution=384,
+        sample_seconds=0.25,
+        fps=None,
+        repetitions=2,
+        visual_notes="",
+    )
+
+    with pytest.raises(ValueError, match="Choose a new --output-dir"):
+        _run_step_comparison(args)
+
+    assert not commands
+    assert (existing_run / "render.mp4").read_bytes() == b"keep"
 
