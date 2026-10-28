@@ -53,26 +53,40 @@ class DWPoseCudaTracker:
                 "the main app's Python environment."
             ) from exc
 
-        if "CUDAExecutionProvider" not in ort.get_available_providers():
+        available_providers = ort.get_available_providers()
+        if "CUDAExecutionProvider" not in available_providers:
             raise RuntimeError(
                 "Native skeletal tracking requires ONNX Runtime CUDA in the main "
-                "application environment. CPU fallback is disabled."
+                "application environment."
             )
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = 1
-        options.inter_op_num_threads = 1
-        options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
+        if "CPUExecutionProvider" not in available_providers:
+            raise RuntimeError(
+                "Native skeletal tracking requires ONNX Runtime CPU placement "
+                "for two profiled pose operators."
+            )
+        strict_cuda_options = ort.SessionOptions()
+        strict_cuda_options.intra_op_num_threads = 1
+        strict_cuda_options.inter_op_num_threads = 1
+        strict_cuda_options.graph_optimization_level = (
+            ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        )
+        strict_cuda_options.add_session_config_entry(
+            "session.disable_cpu_ep_fallback", "1"
+        )
+        pose_options = ort.SessionOptions()
+        pose_options.intra_op_num_threads = 1
+        pose_options.inter_op_num_threads = 1
         cv2.setNumThreads(2)
-        providers = [("CUDAExecutionProvider", {"device_id": 0})]
+        cuda_provider = ("CUDAExecutionProvider", {"device_id": 0})
         self.detector_session = ort.InferenceSession(
             str(self.detector_path),
-            sess_options=options,
-            providers=providers,
+            sess_options=strict_cuda_options,
+            providers=[cuda_provider],
         )
         self.pose_session = ort.InferenceSession(
             str(self.pose_path),
-            sess_options=options,
-            providers=providers,
+            sess_options=pose_options,
+            providers=[cuda_provider, "CPUExecutionProvider"],
         )
         for session in (self.detector_session, self.pose_session):
             if "CUDAExecutionProvider" not in session.get_providers():
