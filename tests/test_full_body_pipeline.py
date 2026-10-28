@@ -131,7 +131,7 @@ def test_8gb_backend_writes_config_and_returns_generated_video(tmp_path, monkeyp
     assert "fps: 30.0" in config
 
 
-def test_60fps_driver_uses_stride_two_and_30fps_output(tmp_path, monkeypatch):
+def test_60fps_driver_keeps_base_stride_and_uses_30fps_output(tmp_path, monkeypatch):
     backend, source_image, driving_video = _fake_backend(tmp_path)
     monkeypatch.setattr(
         "src.pipelines.full_body_animation_pipeline._read_driver_fps",
@@ -147,7 +147,7 @@ def test_60fps_driver_uses_stride_two_and_30fps_output(tmp_path, monkeypatch):
     config = (tmp_path / "output" / "mimicmotion_full_body.yaml").read_text(
         encoding="utf-8"
     )
-    assert "sample_stride: 2" in config
+    assert "sample_stride: 1" in config
     assert "fps: 30.0" in config
 
 
