@@ -127,7 +127,8 @@ It links all full-frame and detail sheets. When the isolated MimicMotion DWPose
 environment finds enough confident landmarks, the detail sheet includes
 enlarged face and hand crops; uncertain or ambiguous regions are omitted, and no
 crop is an automatic quality score. Add `--visual-notes "..."` to save your
-observations in the comparison report.
+observations in the comparison report. Use a new `--output-dir` for each
+comparison; existing repetition data is not overwritten.
 Review the samples and VRAM headroom on the Alienware before changing the
 default; a lower render resolution or extra denoising steps are not assumed to
 improve quality without that measured review.
