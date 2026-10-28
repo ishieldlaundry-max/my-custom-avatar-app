@@ -28,6 +28,10 @@ class FullBodyAnimationError(RuntimeError):
 class FullBodyAnimationCancelled(FullBodyAnimationError):
     """Raised after the active MimicMotion child process has been stopped."""
 
+    def __init__(self, message: str, *, log_path: Path | str | None = None):
+        super().__init__(message)
+        self.log_path = Path(log_path).resolve() if log_path is not None else None
+
 
 DWPOSE_PREFLIGHT_TIMEOUT_SECONDS = 180
 
@@ -841,7 +845,8 @@ class MimicMotionBackend:
         if was_cancelled:
             raise FullBodyAnimationCancelled(
                 "Full-body render cancelled. This attempt's log is preserved at "
-                f"{log_path}. Existing and partial output files remain in {output_dir}."
+                f"{log_path}. Existing and partial output files remain in {output_dir}.",
+                log_path=log_path,
             )
         if return_code != 0:
             tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
