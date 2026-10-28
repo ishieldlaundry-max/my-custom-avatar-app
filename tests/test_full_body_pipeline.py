@@ -327,6 +327,80 @@ def test_cancel_stops_runner_and_preserves_log_and_existing_output(tmp_path):
     assert str(cancelled_log) in str(cancelled_error)
 
 
+def test_repeated_cancellations_keep_each_attempt_log_unchanged(tmp_path):
+    backend, source_image, driving_video = _fake_backend(tmp_path)
+    output_dir = tmp_path / "output"
+    backend.runner_script.write_text(
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "out = Path(sys.argv[sys.argv.index('--output_dir') + 1])\n"
+        "count_path = out / 'runner-count'\n"
+        "count = int(count_path.read_text()) + 1 if count_path.exists() else 1\n"
+        "count_path.write_text(str(count))\n"
+        "print(f'runner attempt {count} started', flush=True)\n"
+        "(out / f'runner-started-{count}').write_text('yes')\n"
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
+
+    def cancel_attempt(attempt_number):
+        result = {}
+
+        def run_render():
+            try:
+                backend.render(
+                    source_image,
+                    driving_video,
+                    output_dir,
+                    FullBodyRenderOptions(fps=15),
+                )
+            except Exception as exc:  # captured for assertions in the test thread
+                result["error"] = exc
+
+        marker = output_dir / f"runner-started-{attempt_number}"
+        render_thread = threading.Thread(target=run_render)
+        render_thread.start()
+        deadline = time.monotonic() + 5
+        started = False
+        cancelled = False
+        while time.monotonic() < deadline:
+            if marker.exists():
+                started = True
+                cancelled = backend.cancel_active_render()
+                break
+            time.sleep(0.05)
+        if not started:
+            cancelled = backend.cancel_active_render()
+        render_thread.join(timeout=5)
+        assert started
+        assert cancelled
+        assert not render_thread.is_alive()
+
+        error = result.get("error")
+        assert isinstance(error, FullBodyAnimationCancelled)
+        assert error.log_path is not None
+        assert error.log_path.is_file()
+        assert str(error.log_path) in str(error)
+        assert f"runner attempt {attempt_number} started" in error.log_path.read_text(
+            encoding="utf-8"
+        )
+        return error, error.log_path, error.log_path.read_text(encoding="utf-8")
+
+    first_error, first_log, first_contents = cancel_attempt(1)
+    second_error, second_log, second_contents = cancel_attempt(2)
+
+    assert first_log != second_log
+    assert first_error.log_path == first_log
+    assert second_error.log_path == second_log
+    assert str(first_log) in str(first_error)
+    assert str(second_log) in str(second_error)
+    assert "runner attempt 1 started" in first_contents
+    assert "runner attempt 2 started" in second_contents
+    assert first_log.read_text(encoding="utf-8") == first_contents
+    assert second_log.read_text(encoding="utf-8") == second_contents
+    assert set(output_dir.glob("mimicmotion-*.log")) == {first_log, second_log}
+
+
 def test_cancelled_status_links_only_the_retained_log_with_spaces(tmp_path):
     output_dir = tmp_path / "Jane Doe" / "full body renders"
     output_dir.mkdir(parents=True)
