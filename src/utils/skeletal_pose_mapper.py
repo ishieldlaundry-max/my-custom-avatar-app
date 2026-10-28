@@ -24,6 +24,13 @@ from .skeletal_frame import (
 )
 
 
+def _deadband(delta: float, threshold: float) -> float:
+    """Remove small frame-to-frame detector noise without freezing larger motion."""
+    if abs(delta) <= threshold:
+        return 0.0
+    return delta - threshold if delta > 0 else delta + threshold
+
+
 class SkeletalPoseMapper:
     """Maps DWPose keypoints to calibrated, smoothed body-height-relative frames."""
 
@@ -38,6 +45,7 @@ class SkeletalPoseMapper:
         self._neutral_smile = {"left": 0.0, "right": 0.0}
         self._rest_landmarks: dict[str, tuple[float, float, float]] = {}
         self._smoothed_landmarks: dict[str, tuple[float, float, float]] = {}
+        self._smoothed_image_landmarks: dict[str, tuple[float, float]] = {}
         self._smoothed_bones: dict[str, tuple[float, float, float]] = {}
         self._smoothed_blendshapes: dict[str, float] = {}
         self._previous_root = (0.0, 0.0, 0.0)
@@ -78,6 +86,7 @@ class SkeletalPoseMapper:
         self._locked_feet.clear()
         self._previous_ankles.clear()
         self._smoothed_landmarks = dict(self._rest_landmarks)
+        self._smoothed_image_landmarks = {}
         self._smoothed_bones = {}
         self._smoothed_blendshapes = {}
         self._previous_root = (0.0, 0.0, 0.0)
@@ -271,7 +280,9 @@ class SkeletalPoseMapper:
             bones[name] = tuple(
                 _finite(
                     previous[index] +
-                    self.smoothing * (axis[index] - previous[index])
+                    self.smoothing * _deadband(
+                        axis[index] - previous[index], 0.035
+                    )
                 )
                 for index in range(3)
             )
@@ -293,9 +304,16 @@ class SkeletalPoseMapper:
         self._smoothed_blendshapes = blendshapes
 
         landmarks = self._smooth_landmarks(spatial, confidence)
+        image_landmarks = self._smooth_image_landmarks(
+            image_landmarks, confidence
+        )
+        root_delta = tuple(
+            _deadband(root[index] - self._previous_root[index], 0.02)
+            for index in range(3)
+        )
         self._previous_root = tuple(
             self._previous_root[index] +
-            self.smoothing * (root[index] - self._previous_root[index])
+            self.smoothing * root_delta[index]
             for index in range(3)
         )
         self._previous_timestamp_ms = timestamp_ms
@@ -332,7 +350,9 @@ class SkeletalPoseMapper:
                 previous = self._smoothed_landmarks.get(name, target)
                 value = tuple(
                     previous[index] +
-                    self.smoothing * (target[index] - previous[index])
+                    self.smoothing * _deadband(
+                        target[index] - previous[index], 0.012
+                    )
                     for index in range(3)
                 )
             else:
@@ -347,6 +367,28 @@ class SkeletalPoseMapper:
                 )
             result[name] = tuple(_finite(component) for component in value)
         self._smoothed_landmarks = result
+        return result
+
+    def _smooth_image_landmarks(
+        self,
+        current: dict[str, tuple[float, float]],
+        confidence: dict[str, float],
+    ) -> dict[str, tuple[float, float]]:
+        result = {}
+        for name, target in current.items():
+            if confidence.get(name, 0.0) < 0.20:
+                continue
+            previous = self._smoothed_image_landmarks.get(name, target)
+            result[name] = tuple(
+                _finite(
+                    previous[index] +
+                    self.smoothing * _deadband(
+                        target[index] - previous[index], 0.004
+                    )
+                )
+                for index in range(2)
+            )
+        self._smoothed_image_landmarks = result
         return result
 
     def _lost_frame(self, timestamp_ms: int) -> SkeletalFrame:
