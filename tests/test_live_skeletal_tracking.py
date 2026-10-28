@@ -200,6 +200,71 @@ def test_dwp_pose_tracker_refuses_cpu_only_onnx_runtime(tmp_path, monkeypatch):
         DWPoseCudaTracker(tmp_path)
 
 
+def test_dwp_pose_tracker_allows_cpu_only_for_pose_graph(tmp_path, monkeypatch):
+    model_dir = tmp_path / "models" / "DWPose"
+    model_dir.mkdir(parents=True)
+    detector_path = model_dir / "yolox_l.onnx"
+    pose_path = model_dir / "dw-ll_ucoco_384.onnx"
+    detector_path.write_bytes(b"detector")
+    pose_path.write_bytes(b"pose")
+
+    class Options:
+        def __init__(self):
+            self.entries = {}
+            self.graph_optimization_level = None
+
+        def add_session_config_entry(self, key, value):
+            self.entries[key] = value
+
+    sessions = []
+    class Session:
+        def __init__(self, model, sess_options, providers):
+            self.model = model
+            self.options = sess_options
+            self.providers = providers
+            self.disabled_runtime_fallback = False
+            sessions.append(self)
+
+        def get_providers(self):
+            return ["CUDAExecutionProvider"]
+
+        def disable_fallback(self):
+            self.disabled_runtime_fallback = True
+
+    modules = {
+        "onnxruntime": SimpleNamespace(
+            SessionOptions=Options,
+            GraphOptimizationLevel=SimpleNamespace(ORT_DISABLE_ALL="disable_all"),
+            get_available_providers=lambda: [
+                "CUDAExecutionProvider", "CPUExecutionProvider"
+            ],
+            InferenceSession=Session,
+        ),
+        "mimicmotion.dwpose.onnxdet": SimpleNamespace(inference_detector=lambda *_: []),
+        "mimicmotion.dwpose.onnxpose": SimpleNamespace(inference_pose=lambda *_: []),
+    }
+    monkeypatch.setattr("src.utils.live_skeletal_tracking.cv2.setNumThreads", lambda _: None)
+    monkeypatch.setattr(
+        "src.utils.live_skeletal_tracking.importlib.import_module",
+        lambda name: modules[name],
+    )
+
+    tracker = DWPoseCudaTracker(tmp_path)
+
+    assert [session.model for session in sessions] == [
+        str(detector_path), str(pose_path)
+    ]
+    assert sessions[0].options.entries["session.disable_cpu_ep_fallback"] == "1"
+    assert sessions[0].options.graph_optimization_level == "disable_all"
+    assert "session.disable_cpu_ep_fallback" not in sessions[1].options.entries
+    assert sessions[1].options.graph_optimization_level is None
+    assert sessions[0].providers == [("CUDAExecutionProvider", {"device_id": 0})]
+    assert sessions[1].providers == [
+        ("CUDAExecutionProvider", {"device_id": 0}), "CPUExecutionProvider"
+    ]
+    assert all(session.disabled_runtime_fallback for session in sessions)
+    tracker.close()
+
 def test_dwp_pose_adapter_returns_body_hands_and_face_keypoints():
     tracker = DWPoseCudaTracker.__new__(DWPoseCudaTracker)
     tracker.detector_session = object()
