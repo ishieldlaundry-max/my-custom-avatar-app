@@ -251,22 +251,14 @@ def _read_driver_fps(path: Path) -> Optional[float]:
     return None
 
 
-def _driver_sampling_plan(
-    driver_fps: float,
-    sample_stride: int = 1,
-) -> tuple[int, float]:
-    """Choose a model-friendly sample stride and matching output FPS."""
+def match_driver_output_fps(driver_fps: float, sample_stride: int = 1) -> float:
+    """Match MimicMotion's sampled-frame timing to the driver's duration."""
     if not math.isfinite(driver_fps) or driver_fps <= 0:
         raise ValueError("Driver FPS must be a positive, finite number.")
     if sample_stride < 1:
         raise ValueError("Sample stride must be at least 1.")
     effective_stride = sample_stride * max(1, int(driver_fps / 24))
-    return effective_stride, round(driver_fps / effective_stride, 3)
-
-
-def match_driver_output_fps(driver_fps: float, sample_stride: int = 1) -> float:
-    """Match MimicMotion's sampled-frame timing to the driver's duration."""
-    return _driver_sampling_plan(driver_fps, sample_stride)[1]
+    return round(driver_fps / effective_stride, 3)
 
 
 def estimate_full_body_output_timing(
@@ -792,14 +784,11 @@ class MimicMotionBackend:
                     "Could not read the driver video's frame rate. Set an explicit "
                     "output FPS and retry, or re-encode the driver as a playable MP4."
                 )
-            effective_stride, output_fps = _driver_sampling_plan(
-                driver_fps,
-                options.sample_stride,
-            )
             render_options = replace(
                 options,
-                sample_stride=effective_stride,
-                fps=output_fps,
+                # MimicMotion's get_video_pose applies its own FPS-based stride.
+                # Keep the configured base stride unchanged to avoid sampling twice.
+                fps=match_driver_output_fps(driver_fps, options.sample_stride),
             )
         output_dir.mkdir(parents=True, exist_ok=True)
 
