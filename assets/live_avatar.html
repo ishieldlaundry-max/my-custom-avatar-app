@@ -65,6 +65,7 @@
         <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Pose landmarks drive the arms, legs, and a bounded side-to-side hip roll. The status shows which parts are currently tracking; briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
+        <div class="metric"><span>Webcam tracking FPS</span><span id="tracking-fps">—</span></div>
         <div class="metric"><span>Render rate</span><span id="fps">—</span></div>
       </aside>
     </div>
@@ -78,6 +79,8 @@
     const $ = (id) => document.getElementById(id);
     const sceneCanvas = $("scene"), statusEl = $("status"), detailEl = $("detail");
     const video = $("camera"), trackingEl = $("tracking"), fpsEl = $("fps"), gpuEl = $("gpu");
+    const trackingFpsEl = $("tracking-fps");
+    const handWarningEl = $("hand-warning");
     let renderer = null;
     try {
       const context = sceneCanvas.getContext("webgl2", { antialias: true, alpha: true })
@@ -105,6 +108,7 @@
     let vrm = null, avatarRoot = null, genericRoot = null;
     let stream = null, poseLandmarker = null, faceLandmarker = null, handLandmarker = null;
     let lastVideoTime = -1, frames = 0, fpsStart = performance.now();
+    let trackingFrames = 0, trackingFpsStart = performance.now();
     const boneNames = VRMHumanBoneName;
     const genericBoneNames = {
       [boneNames.hips]: "Hips",
@@ -476,6 +480,15 @@
       return tracked;
     }
 
+    function updateTrackingRate(now) {
+      trackingFrames++;
+      const elapsed = now - trackingFpsStart;
+      if (elapsed < 1000) return;
+      trackingFpsEl.textContent = `${Math.round(trackingFrames * 1000 / elapsed)} FPS`;
+      trackingFrames = 0;
+      trackingFpsStart = now;
+    }
+
     function trackFrame() {
       if (stream && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
@@ -487,6 +500,7 @@
         const bodyTracked = applyPose(poseLandmarks);
         const faceTracked = applyFace(face);
         const trackedHands = applyHands(hands, poseLandmarks);
+        updateTrackingRate(now);
         trackingEl.textContent = formatTrackingStatus(
           faceTracked,
           bodyTracked,
@@ -510,6 +524,9 @@
         video.srcObject = stream;
         video.hidden = false;
         await video.play();
+        trackingFrames = 0;
+        trackingFpsStart = performance.now();
+        trackingFpsEl.textContent = "—";
         $("stop").disabled = false;
         trackingEl.textContent = "ON";
         statusEl.textContent = "Tracking live";
@@ -524,6 +541,7 @@
     $("stop").addEventListener("click", () => {
       if (stream) stream.getTracks().forEach((track) => track.stop());
       stream = null; video.srcObject = null; video.hidden = true;
+      trackingFrames = 0; trackingFpsEl.textContent = "—";
       $("stop").disabled = true; $("start").disabled = !avatarRoot;
       trackingEl.textContent = "OFF"; statusEl.textContent = avatarRoot ? "Avatar ready" : "Avatar not loaded";
     });

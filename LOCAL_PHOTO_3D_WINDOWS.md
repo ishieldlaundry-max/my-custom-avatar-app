@@ -60,11 +60,19 @@ Blender's automatic rigging step, and loads the prepared GLB into the live
 preview. Then press **Start webcam tracking** to grant camera access and begin
 tracking.
 
+Record the reconstruction and Blender rigging/validation durations shown in the
+completion status. While the webcam is running, record the **Webcam tracking
+FPS** metric separately from the page's **Render rate**. Check that the head,
+arms, legs, and hands respond, and note any browser-console errors or rigging
+warnings before deciding whether the result is usable.
+
 If automatic bone-heat weighting fails, the script tries approximate proximity
 weights for the body and hands. This fallback does not animate individual
 fingers, and joint bending may need quality improvements. The app checks the
-exported skin and reports which validation failed. The original textured mesh
-is kept; when a candidate rigged GLB is available, the error identifies its
+exported skin and verifies that every vertex has weights and that the required
+head, arm, hand, and leg joints actually influence vertices. It reports
+weighting warnings and which validation failed. The original textured mesh is
+kept; when a candidate rigged GLB is available, the error identifies its
 location so the failure can be investigated without asking you to run Blender
 manually.
 

@@ -87,20 +87,117 @@ def test_fallback_normalizes_and_avoids_finger_weights(rig):
     assert mesh.parent is armature
 
 
+def _write_skinned_glb(
+    path: Path,
+    rig,
+    *,
+    include_skin: bool = True,
+    missing_weight_joint: str | None = None,
+    zero_weight_vertex: bool = False,
+):
+    joint_names = sorted(rig.REQUIRED_WEIGHTED_JOINTS)
+    joint_indices = {name: index for index, name in enumerate(joint_names)}
+    vertex_count = len(joint_names)
+    joint_data = bytearray()
+    weight_data = bytearray()
+    for index, name in enumerate(joint_names):
+        joint_index = index
+        weights = (1.0, 0.0, 0.0, 0.0)
+        if name == missing_weight_joint or (zero_weight_vertex and index == 0):
+            joint_index = joint_indices["Hips"]
+        if zero_weight_vertex and index == 0:
+            weights = (0.0, 0.0, 0.0, 0.0)
+        joint_data.extend(struct.pack("<4H", joint_index, 0, 0, 0))
+        weight_data.extend(struct.pack("<4f", *weights))
+
+    binary = bytes(joint_data + weight_data)
+    joint_names_by_node = [
+        {"name": name}
+        for name in joint_names
+    ]
+    mesh_node = {"mesh": 0, **({"skin": 0} if include_skin else {})}
+    document = {
+        "asset": {"version": "2.0"},
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": len(joint_data)},
+            {
+                "buffer": 0,
+                "byteOffset": len(joint_data),
+                "byteLength": len(weight_data),
+            },
+        ],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5123,
+                "count": vertex_count,
+                "type": "VEC4",
+            },
+            {
+                "bufferView": 1,
+                "componentType": 5126,
+                "count": vertex_count,
+                "type": "VEC4",
+            },
+        ],
+        "nodes": [mesh_node, *joint_names_by_node],
+        "meshes": [
+            {
+                "primitives": [
+                    {
+                        "attributes": {
+                            "JOINTS_0": 0,
+                            "WEIGHTS_0": 1,
+                        }
+                    }
+                ]
+            }
+        ],
+        "skins": [
+            {"joints": list(range(1, len(joint_names) + 1))}
+        ] if include_skin else [],
+    }
+    json_chunk = json.dumps(document).encode()
+    json_chunk += b" " * (-len(json_chunk) % 4)
+    binary += b"\0" * (-len(binary) % 4)
+    content = (
+        struct.pack(
+            "<4sII",
+            b"glTF",
+            2,
+            12 + 8 + len(json_chunk) + 8 + len(binary),
+        )
+        + struct.pack("<II", len(json_chunk), 0x4E4F534A)
+        + json_chunk
+        + struct.pack("<II", len(binary), 0x004E4942)
+        + binary
+    )
+    path.write_bytes(content)
+
+
 @pytest.mark.parametrize("skin", [False, True])
 def test_export_requires_actual_skin_binding(rig, tmp_path, skin):
-    document = {
-        "nodes": [{"mesh": 0, **({"skin": 0} if skin else {})}],
-        "meshes": [{"primitives": [{"attributes": {"JOINTS_0": 0, "WEIGHTS_0": 1}}]}],
-        "skins": [{"joints": [1]}] if skin else [],
-    }
-    body = json.dumps(document).encode()
-    body += b" " * (-len(body) % 4)
     path = tmp_path / "mesh.glb"
-    path.write_bytes(struct.pack("<4sIIII", b"glTF", 2, 20 + len(body),
-                                 len(body), 0x4E4F534A) + body)
+    _write_skinned_glb(path, rig, include_skin=skin)
     if skin:
         rig.verify_export(path)
     else:
         with pytest.raises(RuntimeError, match="no usable skin"):
             rig.verify_export(path)
+
+
+def test_export_rejects_required_body_joint_without_influencing_vertices(rig, tmp_path):
+    path = tmp_path / "mesh.glb"
+    _write_skinned_glb(path, rig, missing_weight_joint="Head")
+
+    with pytest.raises(RuntimeError, match="no vertex weights.*Head"):
+        rig.verify_export(path)
+
+
+def test_export_rejects_vertices_without_any_positive_weight(rig, tmp_path):
+    path = tmp_path / "mesh.glb"
+    _write_skinned_glb(path, rig, zero_weight_vertex=True)
+
+    with pytest.raises(RuntimeError, match="vertices with no usable skin weights"):
+        rig.verify_export(path)

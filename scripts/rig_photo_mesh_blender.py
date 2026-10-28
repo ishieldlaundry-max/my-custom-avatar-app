@@ -10,6 +10,15 @@ import bpy
 from mathutils import Vector
 
 
+REQUIRED_WEIGHTED_JOINTS = {
+    "Hips", "Spine", "Chest", "Neck", "Head",
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot",
+}
+
+
 def fail(message):
     print(f"RIGGING_ERROR: {message}", file=sys.stderr)
     raise RuntimeError(message)
@@ -233,8 +242,39 @@ def bind_meshes(meshes, armature):
     return used_fallback
 
 
+def _read_accessor_rows(document, binary, accessor_index):
+    accessor = document["accessors"][accessor_index]
+    component_formats = {
+        5121: ("B", 1, 255),
+        5123: ("H", 2, 65535),
+        5126: ("f", 4, None),
+    }
+    widths = {"VEC4": 4}
+    component_type = accessor.get("componentType")
+    if component_type not in component_formats or accessor.get("type") not in widths:
+        fail("Exported skin attributes use an unsupported component type.")
+    fmt, component_size, normalization_max = component_formats[component_type]
+    width = widths[accessor["type"]]
+    element_size = component_size * width
+    view = document["bufferViews"][accessor["bufferView"]]
+    if view.get("buffer", 0) != 0:
+        fail("Exported skin attributes refer to a non-GLB buffer.")
+    stride = view.get("byteStride", element_size)
+    if stride < element_size:
+        fail("Exported skin attribute stride is invalid.")
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    for row_index in range(accessor["count"]):
+        row_offset = offset + row_index * stride
+        if row_offset < 0 or row_offset + element_size > len(binary):
+            fail("Exported skin attribute data is truncated.")
+        row = struct.unpack_from("<" + fmt * width, binary, row_offset)
+        if accessor.get("normalized") and normalization_max:
+            row = tuple(value / normalization_max for value in row)
+        yield row
+
+
 def verify_export(output):
-    """Blender may export successfully even when the mesh has no skin."""
+    """Check for a real skin and usable influence on every required body joint."""
     data = output.read_bytes()
     if len(data) < 20:
         fail("Exported GLB is truncated.")
@@ -242,22 +282,75 @@ def verify_export(output):
     if (magic != b"glTF" or version != 2 or length != len(data)
             or chunk_type != 0x4E4F534A or 20 + chunk_length > len(data)):
         fail("Exported GLB has an invalid header.")
-    document = json.loads(data[20:20 + chunk_length])
+    document = None
+    binary = b""
+    offset = 12
+    while offset + 8 <= len(data):
+        current_length, current_type = struct.unpack_from("<II", data, offset)
+        start, end = offset + 8, offset + 8 + current_length
+        if end > len(data):
+            fail("Exported GLB has a truncated chunk.")
+        if current_type == 0x4E4F534A:
+            document = json.loads(data[start:end].decode("utf-8").rstrip(" \t\r\n\0"))
+        elif current_type == 0x004E4942:
+            binary = data[start:end]
+        offset = end
+    if document is None:
+        fail("Exported GLB has no JSON document.")
     skins = document.get("skins", [])
     meshes = document.get("meshes", [])
     mesh_nodes = [node for node in document.get("nodes", []) if "mesh" in node]
     if not mesh_nodes:
         fail("Exported GLB has no mesh nodes.")
+    weighted_joint_counts = {}
     for node in mesh_nodes:
         skin = node.get("skin")
         if not isinstance(skin, int) or not 0 <= skin < len(skins) or not skins[skin].get("joints"):
             fail("Exported mesh has no usable skin binding.")
-        primitives = meshes[node["mesh"]].get("primitives", [])
-        if not primitives or not all(
-            {"JOINTS_0", "WEIGHTS_0"}.issubset(primitive.get("attributes", {}))
-            for primitive in primitives
-        ):
-            fail("Exported mesh has no joint/weight attributes.")
+        mesh_index = node["mesh"]
+        if not isinstance(mesh_index, int) or not 0 <= mesh_index < len(meshes):
+            fail("Exported mesh node refers to a missing mesh.")
+        primitives = meshes[mesh_index].get("primitives", [])
+        if not primitives:
+            fail("Exported mesh has no primitives.")
+        joint_nodes = skins[skin]["joints"]
+        for primitive in primitives:
+            attributes = primitive.get("attributes", {})
+            if not {"JOINTS_0", "WEIGHTS_0"}.issubset(attributes):
+                fail("Exported mesh has no joint/weight attributes.")
+            if (
+                document["accessors"][attributes["JOINTS_0"]]["count"]
+                != document["accessors"][attributes["WEIGHTS_0"]]["count"]
+            ):
+                fail("Exported mesh joint and weight counts do not match.")
+            joint_rows = _read_accessor_rows(document, binary, attributes["JOINTS_0"])
+            weight_rows = _read_accessor_rows(document, binary, attributes["WEIGHTS_0"])
+            for joint_row, weight_row in zip(joint_rows, weight_rows):
+                if any(not math.isfinite(weight) or weight < 0 for weight in weight_row):
+                    fail("Exported mesh contains invalid vertex weights.")
+                if sum(weight_row) <= 1e-8:
+                    fail("Exported mesh contains vertices with no usable skin weights.")
+                for joint_index, weight in zip(joint_row, weight_row):
+                    if weight <= 0:
+                        continue
+                    if not isinstance(joint_index, int) or not 0 <= joint_index < len(joint_nodes):
+                        fail("Exported mesh contains an invalid skin joint index.")
+                    node_index = joint_nodes[joint_index]
+                    if not isinstance(node_index, int) or not 0 <= node_index < len(document["nodes"]):
+                        fail("Exported skin refers to a missing joint node.")
+                    joint_name = document["nodes"][node_index].get("name")
+                    if joint_name:
+                        weighted_joint_counts[joint_name] = (
+                            weighted_joint_counts.get(joint_name, 0) + 1
+                        )
+    missing_weights = sorted(
+        REQUIRED_WEIGHTED_JOINTS - weighted_joint_counts.keys()
+    )
+    if missing_weights:
+        fail(
+            "Exported skin has no vertex weights for required body joints: "
+            + ", ".join(missing_weights)
+        )
 
 
 def main():

@@ -57,7 +57,9 @@ class LocalPhotoAvatarResult:
     model_path: str
     source_mesh_path: str
     reconstruction_seconds: float
+    rigging_seconds: float
     peak_allocated_vram_mb: float | None
+    rigging_warnings: tuple[str, ...] = ()
 
 
 def find_blender_executable(blender_path: str | Path | None = None) -> Path:
@@ -104,6 +106,7 @@ def rig_local_photo_mesh(
     blender_path: str | Path | None = None,
     script_path: Path = BLENDER_RIG_SCRIPT,
     timeout_seconds: int = 900,
+    warning_sink: list[str] | None = None,
 ) -> str:
     """Bind a generated GLB to a coarse humanoid skeleton using local Blender."""
     source = Path(model_path).expanduser().resolve()
@@ -139,6 +142,14 @@ def rig_local_photo_mesh(
             "The original textured GLB is unchanged."
         ) from exc
 
+    output_log = f"{result.stdout or ''}\n{result.stderr or ''}"
+    rigging_warnings = [
+        line.split("RIGGING_WARNING:", 1)[1].strip()
+        for line in output_log.splitlines()
+        if "RIGGING_WARNING:" in line
+    ]
+    if warning_sink is not None:
+        warning_sink.extend(rigging_warnings)
     if result.returncode != 0 or not output.is_file():
         detail = (result.stderr or result.stdout or "No diagnostic output was returned.")
         detail = "\n".join(detail.strip().splitlines()[-12:])
@@ -316,7 +327,7 @@ def generate_local_photo_mesh(
             + detail
         )
 
-    output_log = f"{result.stdout}\n{result.stderr}"
+    output_log = f"{result.stdout or ''}\n{result.stderr or ''}"
     peak_match = re.search(r"Peak Memory:\s*([\d.]+)\s*MB", output_log)
     peak_memory = float(peak_match.group(1)) if peak_match else None
     return LocalPhotoMeshResult(
@@ -342,21 +353,33 @@ def generate_rigged_local_photo_avatar(
         sf3d_root=sf3d_root,
         python_path=python_path,
     )
+    rigging_started_at = time.perf_counter()
+    rigging_warnings = []
     try:
         rigged_path = rig_local_photo_mesh(
             mesh.model_path,
             blender_path=blender_path,
             script_path=script_path,
+            warning_sink=rigging_warnings,
         )
     except LocalPhotoTo3DError as exc:
+        rigging_seconds = time.perf_counter() - rigging_started_at
+        warning_details = (
+            " Rigging warnings: " + "; ".join(rigging_warnings)
+            if rigging_warnings else ""
+        )
         raise LocalPhotoTo3DError(
             "Photo reconstruction succeeded, but automatic avatar preparation "
             f"could not finish. The textured mesh is preserved at {mesh.model_path}. "
-            f"{exc}"
+            f"Blender rigging and validation took {rigging_seconds:.1f}s before failing. "
+            f"{exc}{warning_details}"
         ) from exc
+    rigging_seconds = time.perf_counter() - rigging_started_at
     return LocalPhotoAvatarResult(
         model_path=rigged_path,
         source_mesh_path=mesh.model_path,
         reconstruction_seconds=mesh.elapsed_seconds,
+        rigging_seconds=rigging_seconds,
         peak_allocated_vram_mb=mesh.peak_allocated_vram_mb,
+        rigging_warnings=tuple(rigging_warnings),
     )

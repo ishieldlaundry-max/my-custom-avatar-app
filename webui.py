@@ -269,12 +269,18 @@ def generate_local_photo_avatar(source_image, texture_resolution):
         if result.peak_allocated_vram_mb is not None
         else " Stable Fast 3D did not report its peak model memory."
     )
+    rigging_warnings = (
+        " **Rigging warnings:** " + " ".join(result.rigging_warnings)
+        if result.rigging_warnings
+        else ""
+    )
     return (
         result.model_path,
         result.model_path,
         f"**Your photo avatar is prepared and loaded in the live preview below.** "
         f"Reconstruction: {result.reconstruction_seconds:.1f}s at "
-        f"{texture_resolution}px.{peak_memory} "
+        f"{texture_resolution}px. Blender rigging and validation: "
+        f"{result.rigging_seconds:.1f}s.{peak_memory}{rigging_warnings} "
         "This is model-allocated memory, not total GPU memory. "
         "The model and rig are prepared locally; no separate Blender action or GLB "
         "reload is needed. Select **Start webcam tracking** in the live preview. "

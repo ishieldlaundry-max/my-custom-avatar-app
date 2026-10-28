@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -56,6 +57,41 @@ process.stdout.write(JSON.stringify(cases));
     assert result.stdout == (
         '["FACE + BODY","FACE","BODY","1 HAND","2 HANDS","NO TRACK"]'
     )
+
+
+def test_webcam_tracking_fps_counts_processed_camera_frames():
+    source = LIVE_AVATAR.read_text(encoding="utf-8")
+    helper = _extract_function(source, "updateTrackingRate")
+    frame_code = source.split("function trackFrame() {", 1)[1].split(
+        '$("start").addEventListener', 1
+    )[0]
+    script = (
+        """
+let trackingFrames = 0;
+let trackingFpsStart = 0;
+const trackingFpsEl = { textContent: "—" };
+"""
+        + helper
+        + """
+updateTrackingRate(250);
+const first = trackingFpsEl.textContent;
+updateTrackingRate(1000);
+const second = trackingFpsEl.textContent;
+updateTrackingRate(1250);
+updateTrackingRate(2000);
+process.stdout.write(JSON.stringify([first, second, trackingFpsEl.textContent]));
+"""
+    )
+    result = subprocess.run(
+        [_node(), "--input-type=commonjs", "-e", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(result.stdout) == ["—", "2 FPS", "2 FPS"]
+    assert "updateTrackingRate(now);" in frame_code
+    assert "Webcam tracking FPS" in source
 
 
 def test_hip_roll_is_bounded_and_ignores_unreliable_landmarks():

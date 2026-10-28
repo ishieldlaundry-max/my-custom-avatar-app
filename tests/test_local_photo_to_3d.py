@@ -75,15 +75,23 @@ def test_rigged_glb_uses_local_blender_and_keeps_source(monkeypatch, tmp_path):
     def fake_run(command, **kwargs):
         commands.append((command, kwargs))
         make_glb(Path(command[-1]), skinned=True)
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(
+            returncode=0,
+            stdout="RIGGING_WARNING: approximate weights used",
+            stderr="",
+        )
 
     monkeypatch.setattr(pipeline, "find_blender_executable", lambda _path=None: blender)
     monkeypatch.setattr(pipeline.subprocess, "run", fake_run)
-    result = rig_local_photo_mesh(source, script_path=blender_script)
+    warnings = []
+    result = rig_local_photo_mesh(
+        source, script_path=blender_script, warning_sink=warnings
+    )
 
     assert Path(result).name == "mesh_rigged.glb"
     assert Path(result).read_bytes().startswith(b"glTF")
     assert not pipeline.read_glb_document(source).get("skins")
+    assert warnings == ["approximate weights used"]
     command, kwargs = commands[0]
     assert command[:4] == [str(blender), "--background", "--python", str(blender_script)]
     assert kwargs["timeout"] == 900
@@ -130,17 +138,21 @@ def test_photo_avatar_generation_automatically_rigs_the_mesh(monkeypatch, tmp_pa
     source_mesh.write_bytes(b"mesh")
     rigged_model.write_bytes(b"rigged")
     calls = []
+    clock = iter([10.0, 12.25])
 
     def fake_generate(image, resolution, **kwargs):
         calls.append(("generate", image, resolution, kwargs))
         return LocalPhotoMeshResult(str(source_mesh), 42.5, 6144.0)
 
-    def fake_rig(model, **kwargs):
+    def fake_rig(model, warning_sink=None, **kwargs):
         calls.append(("rig", model, kwargs))
+        if warning_sink is not None:
+            warning_sink.append("Using approximate proximity weights.")
         return str(rigged_model)
 
     monkeypatch.setattr(pipeline, "generate_local_photo_mesh", fake_generate)
     monkeypatch.setattr(pipeline, "rig_local_photo_mesh", fake_rig)
+    monkeypatch.setattr(pipeline.time, "perf_counter", lambda: next(clock))
 
     result = generate_rigged_local_photo_avatar(
         source_image,
@@ -154,7 +166,9 @@ def test_photo_avatar_generation_automatically_rigs_the_mesh(monkeypatch, tmp_pa
         model_path=str(rigged_model),
         source_mesh_path=str(source_mesh),
         reconstruction_seconds=42.5,
+        rigging_seconds=2.25,
         peak_allocated_vram_mb=6144.0,
+        rigging_warnings=("Using approximate proximity weights.",),
     )
     assert calls[0][0:3] == ("generate", source_image, 768)
     assert calls[1][0:2] == ("rig", str(source_mesh))
@@ -175,15 +189,13 @@ def test_automatic_photo_rigging_error_preserves_the_generated_mesh(monkeypatch,
             str(source_mesh), 12.0, None
         ),
     )
-    monkeypatch.setattr(
-        pipeline,
-        "rig_local_photo_mesh",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            LocalPhotoTo3DError(
-                f"rig validation failed; candidate file was kept at {candidate}"
-            )
-        ),
-    )
+    def fail_rig(_model, warning_sink=None, **_kwargs):
+        warning_sink.append("heat weighting fallback was used")
+        raise LocalPhotoTo3DError(
+            f"rig validation failed; candidate file was kept at {candidate}"
+        )
+
+    monkeypatch.setattr(pipeline, "rig_local_photo_mesh", fail_rig)
 
     with pytest.raises(LocalPhotoTo3DError) as exc_info:
         generate_rigged_local_photo_avatar(tmp_path / "portrait.jpg")
@@ -192,6 +204,8 @@ def test_automatic_photo_rigging_error_preserves_the_generated_mesh(monkeypatch,
     assert "automatic avatar preparation could not finish" in message
     assert str(source_mesh) in message
     assert str(candidate) in message
+    assert "Blender rigging and validation took" in message
+    assert "heat weighting fallback was used" in message
     assert source_mesh.is_file()
     assert candidate.is_file()
 
