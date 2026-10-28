@@ -47,7 +47,7 @@
 <body>
   <section class="shell">
     <header class="top">
-  <div><h2>Live 3D Avatar</h2><div class="sub">Photo avatar prepared automatically → browser-side webcam tracking</div></div>
+  <div><h2>Live 3D Avatar</h2><div class="sub" id="tracking-mode">Photo avatar prepared automatically → browser-side webcam tracking</div></div>
       <div class="status" id="status">Avatar not loaded</div>
     </header>
     <div class="layout">
@@ -61,10 +61,12 @@
         <input id="model-file" type="file" accept=".vrm,.glb">
         <button id="start" disabled>Start webcam tracking</button>
         <button id="stop" disabled>Stop webcam</button>
+        <button id="calibrate" hidden>Calibrate neutral pose</button>
         <div id="detail">Create a photo avatar in the section above, or load a compatible humanoid VRM. The first model request and tracking models require an internet connection.</div>
         <div class="note">Camera frames stay in this browser. Tracking requests MediaPipe's GPU delegate and uses the full pose model plus face and two-hand landmarks. Pose landmarks drive the arms, legs, and a bounded side-to-side hip roll. The status shows which parts are currently tracking; briefly hidden hands hold their last stable pose. For best results, use bright even lighting and keep your whole body and hands visible. A single webcam cannot recover hidden joints or true depth.</div>
         <div class="metric"><span>Tracking</span><span id="tracking">OFF</span></div>
         <div class="metric"><span>Tracker GPU</span><span id="gpu">Not started</span></div>
+        <div class="metric"><span>DWPose inference</span><span id="inference-ms">—</span></div>
         <div class="metric"><span>Webcam tracking FPS</span><span id="tracking-fps">—</span></div>
         <div class="metric"><span>Render rate</span><span id="fps">—</span></div>
       </aside>
@@ -77,10 +79,32 @@
     import { FilesetResolver, PoseLandmarker, FaceLandmarker, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
     const $ = (id) => document.getElementById(id);
+    const nativeDwpPoseEnabled =
+      new URLSearchParams(window.location.search).get("native_dwp_pose") === "1";
     const sceneCanvas = $("scene"), statusEl = $("status"), detailEl = $("detail");
     const video = $("camera"), trackingEl = $("tracking"), fpsEl = $("fps"), gpuEl = $("gpu");
     const trackingFpsEl = $("tracking-fps");
     const handWarningEl = $("hand-warning");
+    const inferenceMsEl = $("inference-ms");
+    const calibrateButton = $("calibrate");
+    let nativeModeActive = false, nativeFrameUploadPending = false, nativeSnapshotPending = false;
+    let nativeLastVideoTime = -1, nativeLastSentAt = 0, nativeLastPollAt = 0;
+    let nativeLastPoseTimestamp = -1, nativeFaceAnchor = null, nativeServerRequested = false;
+    let avatarBasePosition = null, avatarHeight = 1;
+    const nativeFrameCanvas = document.createElement("canvas");
+    const nativeFrameContext = nativeFrameCanvas.getContext("2d");
+    if (nativeDwpPoseEnabled) {
+      $("tracking-mode").textContent = "Photo avatar prepared automatically → local NVIDIA DWPose tracking";
+      calibrateButton.hidden = false;
+      calibrateButton.disabled = true;
+      const trackerNote = document.querySelector(".note");
+      if (trackerNote) {
+        trackerNote.textContent =
+          "WebView2 captures the webcam locally and sends compressed frames only to this computer's local app. " +
+          "CUDA-first DWPose tracks the body, face, and hands; stand in a neutral full-body pose and calibrate. " +
+          "Some profiled pose operators may use CPU. Single-camera depth is an estimate, not measured 3D.";
+      }
+    }
     let renderer = null;
     try {
       const context = sceneCanvas.getContext("webgl2", { antialias: true, alpha: true })
@@ -194,8 +218,10 @@
       avatarRoot.position.y -= box.min.y;
       avatarRoot.position.z -= center.z;
       const height = Math.max(size.y, 1);
+      avatarHeight = height;
       camera3d.position.set(0, height * 0.57, height * 2.3);
       camera3d.lookAt(0, height * 0.5, 0);
+      avatarBasePosition = avatarRoot.position.clone();
     }
 
     async function loadAvatar(url, label) {
@@ -480,6 +506,252 @@
       return tracked;
     }
 
+    function applyNativeSkeletalFrame(frame) {
+      if (!avatarRoot || !frame) return false;
+      const bones = frame.bones || {};
+      const bodyBindings = [
+        ["RightUpperArm", boneNames.rightUpperArm],
+        ["RightLowerArm", boneNames.rightLowerArm],
+        ["LeftUpperArm", boneNames.leftUpperArm],
+        ["LeftLowerArm", boneNames.leftLowerArm],
+        ["RightUpperLeg", boneNames.rightUpperLeg],
+        ["RightLowerLeg", boneNames.rightLowerLeg],
+        ["LeftUpperLeg", boneNames.leftUpperLeg],
+        ["LeftLowerLeg", boneNames.leftLowerLeg],
+        ["Hips", boneNames.hips],
+        ["Spine", boneNames.spine],
+        ["Head", boneNames.head]
+      ];
+      for (const [sourceName, targetName] of bodyBindings) {
+        const rotation = bones[sourceName];
+        if (Array.isArray(rotation) && Number.isFinite(rotation[2])) {
+          smooth(getBone(targetName), "z", clamp(rotation[2], -1.4, 1.4), 0.22);
+        }
+      }
+      const chestRotation = bones.Chest;
+      if (Array.isArray(chestRotation) && Number.isFinite(chestRotation[2])) {
+        const chest = getBone(boneNames.chest) || getBone(boneNames.spine);
+        smooth(chest, "z", clamp(chestRotation[2], -0.8, 0.8), 0.22);
+      }
+
+      for (const [sourceName, rotation] of Object.entries(bones)) {
+        const match = /^(Left|Right)(Thumb|Index|Middle|Ring|Little)(Proximal|Intermediate|Distal)$/.exec(sourceName);
+        if (!match || !Array.isArray(rotation) || !Number.isFinite(rotation[0])) continue;
+        const side = match[1] === "Left" ? "left" : "right";
+        const targetName = boneNames[`${side}${match[2]}${match[3]}`];
+        if (targetName) smooth(getBone(targetName), "x", clamp(rotation[0], -1.2, 1.2), 0.22);
+      }
+
+      const translation = frame.root_translation || [0, 0, 0];
+      if (frame.calibrated && avatarBasePosition && translation.length >= 3) {
+        avatarRoot.position.set(
+          avatarBasePosition.x + clamp(translation[0], -0.28, 0.28) * avatarHeight * 0.35,
+          avatarBasePosition.y + clamp(translation[1], -0.18, 0.18) * avatarHeight * 0.25,
+          avatarBasePosition.z + clamp(translation[2], -0.35, 0.45) * avatarHeight * 0.3
+        );
+      }
+
+      const imageLandmarks = frame.image_landmarks || {};
+      const confidence = frame.confidence || {};
+      const facePoint = (index) => imageLandmarks[`face_${String(index).padStart(2, "0")}`];
+      const leftEye = facePoint(36), rightEye = facePoint(45), nose = facePoint(30);
+      const head = getBone(boneNames.head);
+      if (
+        head && leftEye && rightEye && nose &&
+        [36, 45, 30].every((index) => (confidence[`face_${index}`] || 0) > 0.2)
+      ) {
+        const eyeCenter = {
+          x: (leftEye[0] + rightEye[0]) / 2,
+          y: (leftEye[1] + rightEye[1]) / 2
+        };
+        const eyeWidth = Math.hypot(rightEye[0] - leftEye[0], rightEye[1] - leftEye[1]);
+        if (eyeWidth > 0.0001) {
+          const signal = {
+            yaw: (nose[0] - eyeCenter.x) / eyeWidth,
+            pitch: (nose[1] - eyeCenter.y) / eyeWidth
+          };
+          if (!nativeFaceAnchor && frame.calibrated && frame.tracked) {
+            nativeFaceAnchor = signal;
+          }
+          if (nativeFaceAnchor) {
+            smooth(head, "y", clamp((signal.yaw - nativeFaceAnchor.yaw) * 2.4, -0.6, 0.6), 0.18);
+            smooth(head, "x", clamp((signal.pitch - nativeFaceAnchor.pitch) * 2.0, -0.45, 0.45), 0.18);
+          }
+        }
+      }
+
+      if (vrm?.expressionManager) {
+        const expressions = frame.blendshapes || {};
+        vrm.expressionManager.setValue(
+          "blink",
+          clamp(((expressions.eyeBlinkLeft || 0) + (expressions.eyeBlinkRight || 0)) / 2, 0, 1)
+        );
+        vrm.expressionManager.setValue("aa", clamp(expressions.jawOpen || 0, 0, 1));
+        vrm.expressionManager.setValue(
+          "happy",
+          clamp(((expressions.mouthSmileLeft || 0) + (expressions.mouthSmileRight || 0)) / 2, 0, 1)
+        );
+      }
+
+      const parts = [];
+      if (frame.tracked) parts.push("BODY");
+      if ((confidence.face_30 || 0) > 0.2) parts.push("FACE");
+      if (Object.keys(bones).some((name) =>
+        /^(Left|Right)(Thumb|Index|Middle|Ring|Little)/.test(name)
+      )) parts.push("HANDS");
+      trackingEl.textContent = parts.join(" + ") || "NO PERSON";
+      return Boolean(frame.tracked);
+    }
+
+    async function nativeRequest(path, options = {}) {
+      const response = await fetch(`/native-avatar-tracking/${path}`, {
+        cache: "no-store",
+        ...options
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.detail || `Local DWPose request failed (${response.status}).`);
+      }
+      return result;
+    }
+
+    async function stopNativeAfterFailure(error) {
+      nativeModeActive = false;
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+      video.srcObject = null;
+      video.hidden = true;
+      if (nativeServerRequested) {
+        nativeRequest("stop", { method: "POST" }).catch(() => {});
+      }
+      nativeServerRequested = false;
+      $("stop").disabled = true;
+      $("start").disabled = !avatarRoot;
+      calibrateButton.disabled = true;
+      trackingEl.textContent = "ERROR";
+      gpuEl.textContent = "DWPose unavailable";
+      statusEl.textContent = "Native tracker error";
+      detailEl.textContent = error.message || String(error);
+    }
+
+    async function submitNativeFrame() {
+      if (!nativeModeActive || nativeFrameUploadPending) return;
+      const sourceWidth = video.videoWidth, sourceHeight = video.videoHeight;
+      if (!sourceWidth || !sourceHeight || !nativeFrameContext) return;
+      nativeFrameUploadPending = true;
+      try {
+        const scale = Math.min(1, 640 / sourceWidth, 480 / sourceHeight);
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        nativeFrameCanvas.width = width;
+        nativeFrameCanvas.height = height;
+        nativeFrameContext.drawImage(video, 0, 0, width, height);
+        const blob = await new Promise((resolve) =>
+          nativeFrameCanvas.toBlob(resolve, "image/jpeg", 0.72)
+        );
+        if (!blob) throw new Error("Could not encode the webcam frame for local DWPose.");
+        await nativeRequest("frame", {
+          method: "POST",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob
+        });
+      } catch (error) {
+        if (nativeModeActive) await stopNativeAfterFailure(error);
+      } finally {
+        nativeFrameUploadPending = false;
+      }
+    }
+
+    async function pollNativeSnapshot(now) {
+      if (!nativeModeActive || nativeSnapshotPending) return;
+      nativeSnapshotPending = true;
+      try {
+        const snapshot = await nativeRequest("snapshot");
+        if (snapshot.error) throw new Error(snapshot.error);
+        if (!snapshot.active) throw new Error("The local DWPose session stopped.");
+        gpuEl.textContent = snapshot.status.includes("ready")
+          ? "CUDA DWPose active"
+          : "Loading CUDA DWPose";
+        inferenceMsEl.textContent = snapshot.pose
+          ? `${snapshot.inference_ms.toFixed(1)} ms`
+          : "Loading…";
+        statusEl.textContent = snapshot.pose?.calibrated
+          ? "Calibrated DWPose tracking"
+          : snapshot.status;
+        if (snapshot.pose && snapshot.pose.timestamp_ms !== nativeLastPoseTimestamp) {
+          nativeLastPoseTimestamp = snapshot.pose.timestamp_ms;
+          applyNativeSkeletalFrame(snapshot.pose);
+          updateTrackingRate(now);
+          if (!snapshot.pose.calibrated) {
+            detailEl.textContent = "Stand upright with your full body and both hands visible, then calibrate in a neutral pose.";
+          } else if (!snapshot.pose.tracked) {
+            detailEl.textContent = "No person detected. Keep your full body in view; the avatar is recovering toward neutral.";
+          } else {
+            detailEl.textContent =
+              `Native DWPose is driving the avatar. Inference ${snapshot.inference_ms.toFixed(1)} ms; ` +
+              `${snapshot.dropped_frames} stale frames dropped. Depth is an approximate body-scale estimate.`;
+          }
+          calibrateButton.textContent = snapshot.pose.calibrated
+            ? "Recalibrate neutral pose"
+            : "Calibrate neutral pose";
+        }
+      } catch (error) {
+        if (nativeModeActive) await stopNativeAfterFailure(error);
+      } finally {
+        nativeSnapshotPending = false;
+      }
+    }
+
+    async function startNativeTracking() {
+      $("start").disabled = true;
+      statusEl.textContent = "Starting local DWPose…";
+      detailEl.textContent = "Requesting webcam access and starting CUDA-first DWPose in the local app.";
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Webcam access is unavailable in this WebView2 session.");
+        }
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        video.hidden = false;
+        await video.play();
+        await nativeRequest("start", { method: "POST" });
+        nativeServerRequested = true;
+        nativeModeActive = true;
+        nativeLastVideoTime = -1;
+        nativeLastSentAt = 0;
+        nativeLastPollAt = 0;
+        nativeLastPoseTimestamp = -1;
+        nativeFaceAnchor = null;
+        trackingFrames = 0;
+        trackingFpsStart = performance.now();
+        trackingFpsEl.textContent = "—";
+        inferenceMsEl.textContent = "Loading…";
+        gpuEl.textContent = "Loading CUDA DWPose";
+        trackingEl.textContent = "STARTING";
+        calibrateButton.disabled = false;
+        $("stop").disabled = false;
+      } catch (error) {
+        if (nativeServerRequested) {
+          nativeRequest("stop", { method: "POST" }).catch(() => {});
+        }
+        nativeServerRequested = false;
+        nativeModeActive = false;
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+        video.srcObject = null;
+        video.hidden = true;
+        $("start").disabled = !avatarRoot;
+        $("stop").disabled = true;
+        calibrateButton.disabled = true;
+        statusEl.textContent = "Native tracker/camera error";
+        gpuEl.textContent = "DWPose unavailable";
+        detailEl.textContent = `${error.message} Native DWPose does not silently switch to the browser tracker or CPU-only inference.`;
+      }
+    }
+
     function updateTrackingRate(now) {
       trackingFrames++;
       const elapsed = now - trackingFpsStart;
@@ -490,7 +762,22 @@
     }
 
     function trackFrame() {
-      if (stream && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+      if (nativeModeActive && stream && video.readyState >= 2) {
+        const now = performance.now();
+        if (
+          video.currentTime !== nativeLastVideoTime &&
+          now - nativeLastSentAt >= 80 &&
+          !nativeFrameUploadPending
+        ) {
+          nativeLastVideoTime = video.currentTime;
+          nativeLastSentAt = now;
+          submitNativeFrame();
+        }
+        if (now - nativeLastPollAt >= 100 && !nativeSnapshotPending) {
+          nativeLastPollAt = now;
+          pollNativeSnapshot(now);
+        }
+      } else if (!nativeDwpPoseEnabled && stream && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const now = performance.now();
         const pose = poseLandmarker?.detectForVideo(video, now);
@@ -512,6 +799,10 @@
     trackFrame();
 
     $("start").addEventListener("click", async () => {
+      if (nativeDwpPoseEnabled) {
+        await startNativeTracking();
+        return;
+      }
       $("start").disabled = true;
       statusEl.textContent = "Starting camera…";
       try {
@@ -538,12 +829,39 @@
         $("start").disabled = false;
       }
     });
-    $("stop").addEventListener("click", () => {
+    $("stop").addEventListener("click", async () => {
+      nativeModeActive = false;
+      if (nativeServerRequested) {
+        nativeRequest("stop", { method: "POST" }).catch((error) => {
+          detailEl.textContent = `Webcam stopped, but local DWPose cleanup failed: ${error.message}`;
+        });
+      }
+      nativeServerRequested = false;
       if (stream) stream.getTracks().forEach((track) => track.stop());
       stream = null; video.srcObject = null; video.hidden = true;
       trackingFrames = 0; trackingFpsEl.textContent = "—";
       $("stop").disabled = true; $("start").disabled = !avatarRoot;
+      calibrateButton.disabled = true;
+      inferenceMsEl.textContent = "—";
       trackingEl.textContent = "OFF"; statusEl.textContent = avatarRoot ? "Avatar ready" : "Avatar not loaded";
+    });
+    calibrateButton.addEventListener("click", async () => {
+      if (!nativeModeActive) return;
+      calibrateButton.disabled = true;
+      nativeFaceAnchor = null;
+      detailEl.textContent = "Hold a neutral, upright full-body pose while DWPose calibrates.";
+      try {
+        await nativeRequest("calibrate", { method: "POST" });
+      } catch (error) {
+        await stopNativeAfterFailure(error);
+      } finally {
+        if (nativeModeActive) calibrateButton.disabled = false;
+      }
+    });
+    window.addEventListener("pagehide", () => {
+      if (nativeServerRequested) {
+        navigator.sendBeacon("/native-avatar-tracking/stop", new Blob([], { type: "text/plain" }));
+      }
     });
 
     function render(now) {

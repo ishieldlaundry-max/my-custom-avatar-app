@@ -128,34 +128,41 @@ latency; Windows frame rate and visual fidelity need real-device evaluation.
 Use App > Stop live tracking to stop it. Restart AvatarDesktop to return to
 the workspace after live mode. Closing AvatarDesktop stops its child processes.
 
-## Native skeletal tracking
+## Native DWPose avatar tracking
 
-Use **App > Start native skeletal tracking** to run a separate OpenCV webcam
-mode without choosing a portrait. It closes the workspace server to free GPU
-memory, then opens **Your camera — skeletal mode** and **Approximate 3D
-skeleton**. Press **C** while your full body is visible in a neutral pose to
-save the body proportions and expression baseline. Press **Q** or Escape, or
-close either preview window, to stop tracking.
+In **3D avatar experiment**, create or load the avatar and select **Start webcam
+tracking**. In the Windows desktop app, WebView2 sends compressed webcam frames
+over loopback to the local application; frames are not sent to an external
+service. CUDA-first DWPose drives the loaded avatar's body, hands, and
+approximate facial motion. Press **Calibrate neutral pose** while upright with
+your full body visible. Use **Stop webcam** to release the camera and tracker.
 
 This mode uses the existing DWPose Wholebody ONNX assets provisioned by
-`setup_full_body_windows.bat`. Inference is required to use
-`CUDAExecutionProvider` from the main application environment; it does not
-fall back to CPU. The MimicMotion source and model files must be present under
-`third_party\MimicMotion`, and the main environment must have a compatible
-`onnxruntime-gpu` installation. Missing assets or CUDA support stop the mode
-with an explicit error.
+`setup_full_body_windows.bat`. The detector graph runs strictly on
+`CUDAExecutionProvider`; the pose graph uses CUDA first and permits CPU placement
+for two profiled operators (`Slice_270` and `Concat_272`). ONNX Runtime runtime
+provider failover remains disabled. The MimicMotion source and model files must
+be present under `third_party\MimicMotion`, and the main environment must have a
+compatible `onnxruntime-gpu` installation. Missing assets or required providers
+stop tracking with an explicit error.
 
 DWPose supplies 2D body, hand, and face landmarks. The skeletal frame stores
 body-height-relative coordinates, confidence, 2D-derived bone rotations, and
 heuristic eye/mouth coefficients. Its Z translation is an approximate body-scale
 estimate from apparent subject size; it is not measured or metric depth, and
-the face coefficients are not model-predicted blendshapes. The stick figure
-therefore shows an approximate monocular 2.5D pose, not a physically calibrated
-3D reconstruction.
+the face coefficients are not model-predicted blendshapes. The avatar is an
+approximate monocular 2.5D animation, not a physically calibrated 3D
+reconstruction. Capture and inference use a one-frame queue, dropping stale
+frames rather than holding up the camera preview.
 
-Capture and inference run independently with a one-frame queue, so slow
-inference drops stale frames rather than holding up camera preview. The
-workspace's photo-face-swap mode remains a separate path.
+## Standalone skeleton preview
+
+Use **App > Start standalone skeleton preview** to run the separate OpenCV
+diagnostic without choosing an avatar. It closes the workspace server to free
+GPU memory, then opens **Your camera — skeletal mode** and **Approximate 3D
+skeleton**. This diagnostic does not animate the generated avatar. Press **C**
+in a neutral full-body pose to calibrate; press **Q** or Escape, or close either
+preview window, to stop.
 
 For a direct launch from the existing application environment:
 
@@ -163,7 +170,8 @@ For a direct launch from the existing application environment:
 venv\Scripts\python.exe run.py --skeletal_tracking --dri_video 0 --require-nvidia
 ```
 
-Alternatively, no executable build is needed to start the same live path:
+The separate live photo-face-swap path is available without building the
+desktop executable:
 
 ```bat
 camera.bat --src_image "C:\path\portrait.png" --paste_back

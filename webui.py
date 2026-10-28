@@ -19,6 +19,10 @@ from src.pipelines.local_photo_to_3d import (
     LocalPhotoTo3DError,
     generate_rigged_local_photo_avatar,
 )
+from src.utils.native_avatar_tracking import (
+    NativeAvatarTrackingSession,
+    register_native_avatar_tracking_routes,
+)
 from src.pipelines.full_body_animation_pipeline import (
     FullBodyAnimationCancelled,
     FullBodyAnimationError,
@@ -84,6 +88,17 @@ else:
 infer_cfg = OmegaConf.load(cfg_path)
 gradio_pipeline = GradioLivePortraitPipeline(infer_cfg)
 full_body_pipeline = FullBodyAnimationPipeline()
+NATIVE_DWPOSE_ENABLED = (
+    os.name == "nt"
+    and args.require_nvidia
+    and args.host_ip in ("127.0.0.1", "localhost")
+)
+native_avatar_tracking_session = (
+    NativeAvatarTrackingSession() if NATIVE_DWPOSE_ENABLED else None
+)
+live_avatar_src = "/gradio_api/file=assets/live_avatar.html"
+if NATIVE_DWPOSE_ENABLED:
+    live_avatar_src += "?native_dwp_pose=1"
 
 
 VIDEO_PIPELINE_ARGUMENT_NAMES = (
@@ -1356,11 +1371,11 @@ with gr.Blocks(
         elem_id="live-avatar-page",
     ):
         gr.Markdown(
-            "This is a separate experimental 3D route. The agreed live-camera behavior is "
-            "Deep-Live-Cam style: the webcam supplies the full body and background, while "
-            "the uploaded photo supplies the animated face. Use the desktop app's **Start "
-            "live tracking** action for that output. The 3D experiment below does not keep "
-            "the webcam body/background."
+            "This 3D experiment is separate from live photo-face swap. It builds a full-body "
+            "avatar from the uploaded photo and uses webcam tracking to animate that model. "
+            "The desktop app's **Start live portrait from photo** action is the separate "
+            "Deep-Live-Cam-style route: it keeps the webcam body and background and swaps "
+            "only the selected photo's face."
         )
         gr.Markdown(
             "### 1. Upload one full-body photo\n"
@@ -1437,13 +1452,14 @@ with gr.Blocks(
         gr.Markdown(
             "### 2. Start webcam tracking\n"
             "The prepared avatar loads automatically after creation. Press **Start webcam tracking** "
-            "in the preview to grant camera access and begin movement tracking. The webcam tracker "
-            "animates the avatar's head, chest, hips, arms, and legs in place; the camera cannot recover "
-            "hidden joints or true depth."
+            "in the preview, then calibrate in a neutral full-body pose. In the Windows desktop app, "
+            "native CUDA-first DWPose drives the avatar's body, hands, and approximate facial motion. "
+            "Camera frames are sent only to this local app. A webcam cannot recover hidden joints or "
+            "measure true depth."
         )
         gr.HTML(
             '<iframe id="live-avatar-frame" title="Live 3D avatar" '
-            'src="/gradio_api/file=assets/live_avatar.html" '
+            f'src="{live_avatar_src}" '
             'style="display:block;width:100%;height:760px;border:0;border-radius:14px;" '
             'allow="camera; fullscreen" loading="eager"></iframe>'
         )
@@ -1774,6 +1790,13 @@ with gr.Blocks(
             full_body_driver_preview,
         ],
         show_progress=True,
+    )
+
+
+if NATIVE_DWPOSE_ENABLED:
+    register_native_avatar_tracking_routes(
+        demo.app,
+        native_avatar_tracking_session,
     )
 
 

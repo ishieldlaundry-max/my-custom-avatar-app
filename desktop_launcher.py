@@ -136,9 +136,11 @@ def main():
             notice("Live tracking is already running. Use Stop live tracking first.")
             return
         if not window.create_confirmation_dialog(
-            "Start native skeletal tracking",
+            "Start standalone skeleton preview",
             "This closes the workspace server to free GPU memory. The webcam will be "
-            "tracked locally with CUDA DWPose; no portrait is used. Press V in the camera "
+            "tracked locally with CUDA DWPose; this diagnostic does not animate a photo "
+            "avatar. Use the 3D avatar workspace's Start webcam tracking action to drive "
+            "a generated avatar. Press V in the camera "
             "window to cycle webcam devices, C to calibrate, and Q to stop. Depth is an approximate body-scale estimate, not a measurement. "
             "Close other webcam apps first. Continue?"
         ):
@@ -149,7 +151,7 @@ def main():
             "skeletal",
         )
         window.load_html(
-            "<html><body><h2>Native skeletal tracking started</h2>"
+            "<html><body><h2>Standalone skeleton preview started</h2>"
             "<p>Look for the camera and approximate 3D skeleton windows. Press V in the "
             "camera window to cycle cameras; the selected index appears in the preview. Press C in a neutral full-body pose to calibrate; press Q to stop. Depth is estimated "
             "from body scale. If no windows appear, open the App menu logs. Restart "
@@ -191,7 +193,7 @@ def main():
 
     menu = [Menu("App", [
         MenuAction("Start live portrait from photo", guarded(start_live)),
-        MenuAction("Start native skeletal tracking", guarded(start_skeletal_tracking)),
+        MenuAction("Start standalone skeleton preview", guarded(start_skeletal_tracking)),
         MenuAction("Stop live tracking", guarded(lambda: stop_process(live))),
         MenuAction("Open logs", guarded(lambda: os.startfile(str(logs)))),
         MenuAction("Exit", window.destroy),
