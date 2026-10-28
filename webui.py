@@ -15,18 +15,21 @@ import os.path as osp
 from omegaconf import OmegaConf
 
 from src.pipelines.gradio_live_portrait_pipeline import GradioLivePortraitPipeline
-from src.pipelines.local_photo_to_3d import (
-    LocalPhotoTo3DError,
-    generate_rigged_local_photo_avatar,
-)
 from src.pipelines.full_body_animation_pipeline import (
+    DWPOSE_PREFLIGHT_TIMEOUT_SECONDS,
     FullBodyAnimationCancelled,
     FullBodyAnimationError,
     FullBodyAnimationPipeline,
     FullBodyRenderOptions,
+    estimate_full_body_output_timing,
     extract_driver_preview_frames,
     inspect_full_body_inputs,
 )
+from src.pipelines.local_photo_to_3d import (
+    LocalPhotoTo3DError,
+    generate_rigged_local_photo_avatar,
+)
+from src.utils.gradio_file_links import format_cancelled_render_status
 
 
 def load_description(fp):
@@ -186,7 +189,7 @@ def execute_full_body_animation(
     chunk_size=16,
     frames_overlap=4,
     num_inference_steps=15,
-    fps=15,
+    fps=0,
     seed=42,
     confirm_full_body_framing=False,
 ):
@@ -212,7 +215,7 @@ def execute_full_body_animation(
             chunk_size=int(chunk_size),
             frames_overlap=int(frames_overlap),
             num_inference_steps=int(num_inference_steps),
-            fps=int(fps),
+            fps=None if float(fps or 0) == 0 else float(fps),
             seed=int(seed),
         )
         output = full_body_pipeline.render(
@@ -222,7 +225,13 @@ def execute_full_body_animation(
             options,
         )
     except FullBodyAnimationCancelled as exc:
-        return gr.update(), f"**Render cancelled.** {exc}"
+        status = format_cancelled_render_status(
+            str(exc),
+            exc.log_path,
+            allowed_paths=demo.allowed_paths,
+            allowed_root=Path("results") / "full_body",
+        )
+        return gr.update(), status
     except FullBodyAnimationError as exc:
         raise gr.Error(str(exc), duration=12) from exc
     except (OSError, ValueError) as exc:
@@ -238,15 +247,29 @@ def cancel_full_body_animation():
 
 
 def validate_full_body_inputs(source_image, driving_video):
-    """Return input checks and lightweight driver previews before rendering."""
+    """Check framing, clip duration, person count, and sampled body landmarks."""
     report = inspect_full_body_inputs(source_image, driving_video)
+    pose_warnings = full_body_pipeline.inspect_driver_video(driving_video)
     previews = extract_driver_preview_frames(driving_video)
     preview_note = (
         ""
         if previews or not driving_video
-        else "\n\n- Driver frames could not be decoded. Re-encode the clip as a playable MP4."
+        else "\n\n- Representative driver frames could not be decoded. Re-encode "
+        "the clip as a playable MP4."
     )
-    return report.to_markdown() + preview_note, source_image, previews
+    return (
+        report.to_markdown()
+        + "\n\n### Driver pose check\n"
+        + "\n".join(f"- {warning}" for warning in pose_warnings)
+        + preview_note,
+        source_image,
+        previews,
+    )
+
+
+def show_full_body_output_timing(driving_video, fps):
+    """Update the pre-render timing estimate when its inputs change."""
+    return estimate_full_body_output_timing(driving_video, fps)
 
 
 def generate_local_photo_avatar(source_image, texture_resolution):
@@ -1028,7 +1051,7 @@ js_func = r"""
             if (listingDevices || starting) return;
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setStatus("This browser does not expose microphone capture.", true);
+                setStatus("This browser does not expose microphone capture. Use a current browser on HTTPS or localhost, then reload and try Start again.", true);
                 return;
             }
 
@@ -1461,12 +1484,18 @@ with gr.Blocks(
             )
         with gr.Row():
             full_body_check_button = gr.Button(
-                "CHECK FRAMING & DURATION",
+                "CHECK FRAMING, PEOPLE & DURATION",
                 variant="secondary",
             )
             full_body_validation_status = gr.Markdown(
                 "Run the input check before starting the GPU render.",
             )
+        gr.Markdown(
+            "The DWPose check runs on CPU and shows activity while it works. "
+            "It samples up to 12 frames (up to 24 for clips of 6 seconds or less), "
+            f"stops after {DWPOSE_PREFLIGHT_TIMEOUT_SECONDS} seconds, and reports "
+            "its elapsed time when finished."
+        )
         with gr.Row():
             full_body_target_preview = gr.Image(
                 label="Full-body target — check head, hands, feet, clothing, and margins",
@@ -1485,12 +1514,13 @@ with gr.Blocks(
         gr.Markdown(
             "Up to four evenly spaced frames are shown across the driver clip; select "
             "any frame to inspect it at full size. Frames are scaled down only for "
-            "display. Compare them with the target before rendering."
+            "display. Compare them with the target and review the sampled DWPose warnings above."
         )
         full_body_confirm_framing = gr.Checkbox(
             label=(
-                "I confirm the target shows the head, full body, and both hands, "
-                "and I reviewed any warnings above."
+                "I reviewed the framing and sampled-pose warnings above. I confirm "
+                "the target shows the head, full body, and both hands, and I want "
+                "to continue even if the driver check found issues."
             ),
             value=False,
         )
@@ -1532,8 +1562,30 @@ with gr.Blocks(
                 precision=0,
             )
         with gr.Row():
-            full_body_fps = gr.Number(value=15, label="Output FPS", precision=0)
+            full_body_fps = gr.Number(
+                value=0,
+                label="Output FPS (0 = match driver timing)",
+                precision=0,
+                info="Leave at 0 to keep the rendered clip at the driver's original speed.",
+            )
             full_body_seed = gr.Number(value=42, label="Seed", precision=0)
+        full_body_timing_estimate = gr.Markdown(
+            "Upload or record a driver clip to see its FPS and estimated output duration."
+        )
+        full_body_driving_video.change(
+            fn=show_full_body_output_timing,
+            inputs=[full_body_driving_video, full_body_fps],
+            outputs=[full_body_timing_estimate],
+            show_progress=False,
+            queue=False,
+        )
+        full_body_fps.change(
+            fn=show_full_body_output_timing,
+            inputs=[full_body_driving_video, full_body_fps],
+            outputs=[full_body_timing_estimate],
+            show_progress=False,
+            queue=False,
+        )
         with gr.Row():
             full_body_render_button = gr.Button(
                 "RENDER FULL-BODY AVATAR",
@@ -1762,12 +1814,12 @@ with gr.Blocks(
     full_body_check_button.click(
         fn=validate_full_body_inputs,
         inputs=[full_body_source_image, full_body_driving_video],
-        outputs=[
-            full_body_validation_status,
-            full_body_target_preview,
-            full_body_driver_preview,
-        ],
-        show_progress=True,
+            outputs=[
+                full_body_validation_status,
+                full_body_target_preview,
+                full_body_driver_preview,
+            ],
+            show_progress=True,
     )
 
 
