@@ -1793,17 +1793,19 @@ with gr.Blocks(
     )
 
 
-if NATIVE_DWPOSE_ENABLED:
-    register_native_avatar_tracking_routes(
-        demo.app,
-        native_avatar_tracking_session,
-    )
-
-
 if __name__ == '__main__':
     demo.launch(
         server_port=args.port,
         share=False,
         server_name=args.host_ip,
         allowed_paths=["assets"],
+        prevent_thread_lock=True,
     )
+    if NATIVE_DWPOSE_ENABLED:
+        # Gradio recreates its FastAPI app during launch; register on the app
+        # instance that is actually serving requests.
+        register_native_avatar_tracking_routes(
+            demo.app,
+            native_avatar_tracking_session,
+        )
+    demo.block_thread()
