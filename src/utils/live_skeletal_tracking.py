@@ -166,6 +166,7 @@ class LatestSkeletalInference:
         self._frames: queue.Queue = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self._calibrate = threading.Event()
+        self._reset_mapper = threading.Event()
         self._lock = threading.Lock()
         self._thread = threading.Thread(
             target=self._worker,
@@ -204,6 +205,13 @@ class LatestSkeletalInference:
 
     def request_calibration(self) -> None:
         self._calibrate.set()
+
+    def request_mapper_reset(self) -> None:
+        """Discard camera-specific calibration while keeping the models loaded."""
+        self._reset_mapper.set()
+        with self._lock:
+            self._latest = None
+            self._status = "Camera changed. Press C in a neutral full-body pose."
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -248,6 +256,13 @@ class LatestSkeletalInference:
                     continue
                 if packet is None:
                     break
+                if self._reset_mapper.is_set():
+                    self._reset_mapper.clear()
+                    mapper = self.mapper_factory()
+                    self._calibrate.clear()
+                    self._set_status(
+                        "Camera changed. Press C in a neutral full-body pose."
+                    )
                 frame, timestamp_ms = packet
                 started = time.perf_counter()
                 pose = tracker.track(frame)
