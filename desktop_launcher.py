@@ -138,8 +138,8 @@ def main():
         if not window.create_confirmation_dialog(
             "Start native skeletal tracking",
             "This closes the workspace server to free GPU memory. The webcam will be "
-            "tracked locally with CUDA DWPose; no portrait is used. Press C to calibrate "
-            "and Q to stop. Depth is an approximate body-scale estimate, not a measurement. "
+            "tracked locally with CUDA DWPose; no portrait is used. Press V in the camera "
+            "window to cycle webcam devices, C to calibrate, and Q to stop. Depth is an approximate body-scale estimate, not a measurement. "
             "Close other webcam apps first. Continue?"
         ):
             return
@@ -150,8 +150,8 @@ def main():
         )
         window.load_html(
             "<html><body><h2>Native skeletal tracking started</h2>"
-            "<p>Look for the camera and approximate 3D skeleton windows. Press C in a "
-            "neutral full-body pose to calibrate; press Q to stop. Depth is estimated "
+            "<p>Look for the camera and approximate 3D skeleton windows. Press V in the "
+            "camera window to cycle cameras; the selected index appears in the preview. Press C in a neutral full-body pose to calibrate; press Q to stop. Depth is estimated "
             "from body scale. If no windows appear, open the App menu logs. Restart "
             "Avatar Studio to return to the workspace.</p></body></html>"
         )
