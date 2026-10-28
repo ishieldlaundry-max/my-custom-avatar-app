@@ -36,6 +36,7 @@ def render_camera_view(
     status: str,
     inference_ms: float = 0.0,
     dropped_frames: int = 0,
+    camera_index: Optional[int] = None,
 ) -> np.ndarray:
     """Mirror the display and draw confidence-qualified body/hand points."""
     view = cv2.flip(frame_bgr, 1)
@@ -64,7 +65,8 @@ def render_camera_view(
             if not name.startswith("face_"):
                 cv2.circle(view, point, 3, (245, 245, 245), -1, cv2.LINE_AA)
 
-    _draw_label(view, "Native skeletal tracking | C calibrate | Q quit", (12, 24))
+    camera_label = f"Camera {camera_index} | " if camera_index is not None else ""
+    _draw_label(view, f"{camera_label}V next camera | C calibrate | Q quit", (12, 24))
     _draw_label(view, status, (12, 50), (110, 240, 255))
     if skeletal is not None:
         depth = (
@@ -176,7 +178,10 @@ class LiveSkeletalPreview:
     ) -> None:
         cv2.imshow(
             self.CAMERA_WINDOW,
-            render_camera_view(camera_frame, skeletal, status, inference_ms, dropped_frames),
+            render_camera_view(
+                camera_frame, skeletal, status, inference_ms, dropped_frames,
+                self.camera_index,
+            ),
         )
         cv2.imshow(
             self.SKELETON_WINDOW,
@@ -189,6 +194,8 @@ class LiveSkeletalPreview:
             return "quit"
         if key in (ord("c"), ord("C")):
             return "calibrate"
+        if key in (ord("v"), ord("V")):
+            return "next_camera"
         for window in (self.CAMERA_WINDOW, self.SKELETON_WINDOW):
             try:
                 if cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
